@@ -236,8 +236,7 @@ func GenStructStep(
 		}
 
 		var usefulHashes []byte
-
-		if h != nil && (hasHash[maxLen] != 0 || hasTree[maxLen] != 0) { // top level must be in db
+		if h != nil && (hasHash[maxLen] != 0 || hasTree[maxLen] != 0 || (maxLen == 1 && groups[1] != 0)) { // top level must be in db
 			if trace {
 				fmt.Printf("why now: %x,%b,%b,%b\n", curr[:maxLen], hasHash, hasTree, groups)
 			}
