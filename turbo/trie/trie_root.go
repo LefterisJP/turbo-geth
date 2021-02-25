@@ -782,14 +782,14 @@ func (c *AccTrieCursor) _seek(seek []byte, withinPrefix []byte) (bool, error) {
 		// - k is not child of current key
 		// - looking for first child, means: c.childID[c.lvl] <= int16(bits.TrailingZeros16(c.hasTree[c.lvl]))
 		// otherwise do .Seek call
-		//k, v, err = c.c.Next()
-		//if err != nil {
-		//	return false, err
-		//}
-		//if bytes.HasPrefix(k, c.k[c.lvl]) {
-		c.is++
-		k, v, err = c.c.Seek(seek)
-		//}
+		k, v, err = c.c.Next()
+		if err != nil {
+			return false, err
+		}
+		if bytes.HasPrefix(k, c.k[c.lvl]) {
+			c.is++
+			k, v, err = c.c.Seek(seek)
+		}
 	}
 	if err != nil {
 		return false, err
