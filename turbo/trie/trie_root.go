@@ -294,7 +294,6 @@ func (l *FlatDBTrieLoader) CalcTrieRoot(tx ethdb.Tx, prefix []byte, quit <-chan 
 	if err := l.receiver.Receive(CutoffStreamItem, nil, nil, nil, nil, nil, false, len(prefix)); err != nil {
 		return EmptyRoot, err
 	}
-
 	return l.receiver.Root(), nil
 }
 
@@ -788,7 +787,7 @@ func (c *AccTrieCursor) _seek(seek []byte, withinPrefix []byte) (bool, error) {
 		//	return false, err
 		//}
 		//if bytes.HasPrefix(k, c.k[c.lvl]) {
-		//	c.is++
+		c.is++
 		k, v, err = c.c.Seek(seek)
 		//}
 	}
