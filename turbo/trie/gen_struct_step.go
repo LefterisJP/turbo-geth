@@ -242,7 +242,7 @@ func GenStructStep(
 				fmt.Printf("why now: %x,%b,%b,%b\n", curr[:maxLen], hasHash, hasTree, groups)
 			}
 			usefulHashes = e.topHashes(curr[:maxLen], hasHash[maxLen], groups[maxLen])
-			if maxLen != 0 {
+			if maxLen > 1 {
 				hasTree[maxLen-1] |= 1 << curr[maxLen-1] // register myself in parent bitmap
 			}
 			if maxLen > 1 {
