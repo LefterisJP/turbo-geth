@@ -675,8 +675,8 @@ type AccTrieCursor struct {
 	canUse                func([]byte) (bool, []byte) // if this function returns true - then this AccTrie can be used as is and don't need continue PostorderTraversal, but switch to sibling instead
 	nextCreated           []byte
 
-	kBuf []byte
-	quit <-chan struct{}
+	kBuf, kBuf2 []byte
+	quit        <-chan struct{}
 }
 
 func AccTrie(canUse func([]byte) (bool, []byte), hc HashCollector2, c ethdb.Cursor, quit <-chan struct{}) *AccTrieCursor {
