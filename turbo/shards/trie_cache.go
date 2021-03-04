@@ -368,7 +368,7 @@ func (sc *StateCache) DebugPrintAccounts() error {
 	return nil
 }
 
-func (sc *StateCache) AccountTree(prefix []byte, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) error {
+func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) error {
 	var cur []byte
 	seek := make([]byte, 0, 64)
 	buf := make([]byte, 0, 64)
@@ -431,8 +431,10 @@ func (sc *StateCache) AccountTree(prefix []byte, walker func(k []byte, h common.
 				for k[nonNilLvl] == nil && nonNilLvl > 1 {
 					nonNilLvl--
 				}
+				if k[nonNilLvl] == nil { // if no parent found
+					return false
+				}
 				next = append(append(next[:0], k[lvl]...), uint8(id[lvl]))
-				buf = append(append(buf[:0], k[nonNilLvl]...), uint8(id[nonNilLvl]))
 				if _seek(next, buf) {
 					return true
 				}

@@ -342,16 +342,16 @@ func (r *RootHashAggregator) Receive(itemType StreamItem,
 	cutoff int,
 ) error {
 	//r.traceIf("9c3dc2561d472d125d8f87dde8f2e3758386463ade768ae1a1546d34101968bb", "00")
-	//if storageKey == nil {
-	//	//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
-	//	fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
-	//	//}
-	//} else {
-	//	//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
-	//	//fmt.Printf("%x\n", storageKey)
-	//	fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
-	//	//}
-	//}
+	if storageKey == nil {
+		//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
+		fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
+		//}
+	} else {
+		//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
+		//fmt.Printf("%x\n", storageKey)
+		fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
+		//}
+	}
 
 	switch itemType {
 	case StorageStreamItem:
@@ -1471,7 +1471,7 @@ func CastTrieNodeValue(hashes, rootHash []byte) []common.Hash {
 
 func collectMissedAccTrie(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
 	var misses [][]byte
-	if err := cache.AccountTree(prefix, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+	if err := cache.AccountTree("collectMissedAccTrie", prefix, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 		if k == nil || !hasTree || !hasHash {
 			return hasTree, nil
 		}
@@ -1588,16 +1588,12 @@ func loadStorageToCache(ss ethdb.Cursor, misses [][]byte, cache *shards.StateCac
 
 func (l *FlatDBTrieLoader) collectMissedAccounts(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
 	var misses [][]byte
-	if err := cache.AccountTree(prefix, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-		if k == nil {
-			return hasTree, nil
+	if err := l.walkAccountTree("collectMissedAccounts", prefix, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
+		if skipState {
+			return nil
 		}
-
-		if !hasHash {
-			if !cache.HasAccountWithInPrefix(k) {
-				misses = append(misses, common.CopyBytes(k))
-			}
-			return hasTree, nil
+		if !cache.HasAccountWithInPrefix(accSeek) {
+			misses = append(misses, common.CopyBytes(accSeek))
 		}
 
 		if ok, _ := canUse(k); ok {
@@ -1645,12 +1641,12 @@ func (l *FlatDBTrieLoader) prep(accs, st, trieAcc ethdb.Cursor, prefix []byte, c
 	return nil
 }
 
-func (l *FlatDBTrieLoader) walkAccountTree(prefix []byte, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
+func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
 	var prev []byte
 	_, nextCreated := canUse(prefix)
 	var skipState bool
 
-	return cache.AccountTree(prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+	return cache.AccountTree(logPrefix, prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 		if k == nil {
 			skipState = skipState && !dbutils.NextNibblesSubtree(prev, &l.accSeek)
 			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
@@ -1693,7 +1689,7 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *Storage
 		return !retain, nextCreated
 	}
 
-	if err := l.walkAccountTree(prefix, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
+	if err := l.walkAccountTree("post", prefix, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
 		if skipState {
 			goto SkipAccounts
 		}
@@ -1836,7 +1832,7 @@ func (l *FlatDBTrieLoader) CalcTrieRootOnCache(cache *shards.StateCache) (common
 		retain, nextCreated := l.rd.RetainWithMarker(prefix)
 		return !retain, nextCreated
 	}
-	if err := l.walkAccountTree([]byte{}, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
+	if err := l.walkAccountTree("final", []byte{}, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
 		if len(ihK) == 0 { // Loop termination
 			return nil
 		}
