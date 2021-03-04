@@ -787,7 +787,7 @@ func (c *AccTrieCursor) _seek(seek []byte, withinPrefix []byte) (bool, error) {
 		//	return false, err
 		//}
 		//if bytes.HasPrefix(k, c.k[c.lvl]) {
-		//	c.is++
+		c.is++
 		k, v, err = c.c.Seek(seek)
 		//}
 	}
@@ -867,7 +867,6 @@ func (c *AccTrieCursor) _nextSiblingInDB() error {
 		c.k[c.lvl] = nil
 		return nil
 	}
-	c.is++
 	if _, err := c._seek(c.next, []byte{}); err != nil {
 		return err
 	}
