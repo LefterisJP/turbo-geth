@@ -1644,11 +1644,11 @@ func (l *FlatDBTrieLoader) prep(accs, st, trieAcc ethdb.Cursor, prefix []byte, c
 func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
 	var prev []byte
 	_, nextCreated := canUse(prefix)
-	var skipState bool
-
+	skipState := true
 	return cache.AccountTree(logPrefix, prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 		if k == nil {
-			skipState = skipState && !dbutils.NextNibblesSubtree(prev, &l.accSeek)
+			endOfRange := !dbutils.NextNibblesSubtree(prev, &l.accSeek) || !bytes.HasPrefix(l.accSeek, prefix)
+			skipState = skipState && prev != nil && endOfRange
 			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
 		}
 		if !hasTree && !hasHash {
