@@ -1647,8 +1647,9 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 	skipState := true
 	return cache.AccountTree(logPrefix, prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 		if k == nil {
-			endOfRange := !dbutils.NextNibblesSubtree(prev, &l.accSeek) || !bytes.HasPrefix(l.accSeek, prefix)
-			skipState = skipState && prev != nil && endOfRange
+			endOfWorld := !dbutils.NextNibblesSubtree(prev, &l.accSeek)
+			l.accSeek = firstNotCoveredPrefix(prev, prefix, l.accSeek)
+			skipState = skipState && prev != nil && (endOfWorld || !bytes.HasPrefix(l.accSeek, prefix))
 			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
 		}
 		if !hasTree && !hasHash {
@@ -1696,10 +1697,12 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *Storage
 			goto SkipAccounts
 		}
 
+		fmt.Printf("8:%x\n", accSeek)
 		if err := cache.WalkAccounts(accSeek, func(addrHash common.Hash, acc *accounts.Account) (bool, error) {
 			if err := common.Stopped(quit); err != nil {
 				return false, err
 			}
+			fmt.Printf("9:%x\n", addrHash)
 			i2++
 			hexutil.DecompressNibbles(addrHash.Bytes(), &l.kHex)
 			if keyIsBefore(ihK, l.kHex) || !bytes.HasPrefix(l.kHex, prefix) { // read all accounts until next AccTrie
