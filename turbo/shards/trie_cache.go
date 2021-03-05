@@ -368,7 +368,7 @@ func (sc *StateCache) DebugPrintAccounts() error {
 	return nil
 }
 
-func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) error {
+func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) (err error) {
 	var cur []byte
 	seek := make([]byte, 0, 64)
 	buf := make([]byte, 0, 64)
@@ -383,6 +383,19 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 	var _hasChild = func() bool { return (1<<id[lvl])&hasState[lvl] != 0 }
 	var _hasTree = func() bool { return (1<<id[lvl])&hasTree[lvl] != 0 }
 	var _hasHash = func() bool { return (1<<id[lvl])&hasHash[lvl] != 0 }
+	var _nextSiblingInMem = func() bool {
+		for id[lvl]++; id[lvl] < int8(bits.Len16(hasState[lvl])); id[lvl]++ { // go to sibling
+			if !_hasChild() {
+				continue
+			}
+
+			if _hasHash() {
+				hashID[lvl]++
+			}
+			return true
+		}
+		return false
+	}
 	var _unmarshal = func(ihK []byte, hasStateItem, hasTreeItem, hasHashItem uint16, hashItem []common.Hash) {
 		from, to := lvl+1, len(k)
 		if lvl >= len(k) {
@@ -394,22 +407,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 		lvl = len(ihK)
 		k[lvl], hasState[lvl], hasTree[lvl], hasHash[lvl], hashes[lvl] = ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem
 		hashID[lvl], id[lvl] = -1, int8(bits.TrailingZeros16(hasState[lvl]))-1
-	}
-	var _nextSiblingInMem = func() bool {
-		for id[lvl]++; id[lvl] < int8(bits.Len16(hasState[lvl])); id[lvl]++ { // go to sibling
-			if !_hasChild() {
-				continue
-			}
-
-			if _hasHash() {
-				hashID[lvl]++
-				return true
-			}
-			if _hasTree() {
-				return true
-			}
-		}
-		return false
+		_nextSiblingInMem()
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
 		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.AccountHashesSeek(seek)
@@ -421,7 +419,6 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 			return false
 		}
 		_unmarshal(ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem)
-		_nextSiblingInMem()
 		return true
 	}
 	var _nextSiblingOfParentInMem = func() bool {
@@ -459,11 +456,16 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 
 	_seek(prefix, []byte{})
 
+	var toChild bool
 	for k[lvl] != nil && bytes.HasPrefix(k[lvl], prefix) { // go to sibling in cache
 		cur = append(append(cur[:0], k[lvl]...), uint8(id[lvl]))
-		toChild, err := walker(cur, hashes[lvl][hashID[lvl]], _hasTree(), _hasHash())
-		if err != nil {
-			return err
+		if _hasHash() {
+			toChild, err = walker(cur, hashes[lvl][hashID[lvl]], _hasTree(), true)
+		} else {
+			toChild, err = walker(cur, common.Hash{}, _hasTree(), false)
+			if err != nil {
+				return err
+			}
 		}
 
 		// preOrderTraversalStep
@@ -472,7 +474,6 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 			ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, ok := sc.GetAccountHash(next)
 			if ok {
 				_unmarshal(ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem)
-				_nextSiblingInMem()
 				continue
 			}
 			onMiss(cur)
@@ -480,7 +481,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 		_ = _nextSiblingInMem() || _nextSiblingOfParentInMem() || _nextSiblingInDB()
 	}
 
-	if _, err := walker(nil, common.Hash{}, false, false); err != nil {
+	if _, err = walker(nil, common.Hash{}, false, false); err != nil {
 		return err
 	}
 	return nil

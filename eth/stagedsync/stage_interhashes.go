@@ -368,6 +368,7 @@ func incrementIntermediateHashes(logPrefix string, s *StageState, db ethdb.RwTx,
 	p.TempDir = tmpdir
 	rl := trie.NewRetainList(0)
 	collect := func(k, v []byte, _ etl.CurrentTableReader, _ etl.LoadNextFunc) error {
+		fmt.Printf("ex: %x,%t\n", k, len(v) == 0)
 		rl.AddKeyWithMarker(k, len(v) == 0)
 		return nil
 	}
@@ -441,8 +442,7 @@ func incrementIntermediateHashes(logPrefix string, s *StageState, db ethdb.RwTx,
 	return hash, nil
 }
 
-func UnwindIntermediateHashesStage(u *UnwindState, s *StageState, db ethdb.Database, _ *shards.StateCache, tmpdir string, quit <-chan struct{}) error {
-	var cache *shards.StateCache
+func UnwindIntermediateHashesStage(u *UnwindState, s *StageState, db ethdb.Database, cache *shards.StateCache, tmpdir string, quit <-chan struct{}) error {
 	hash, err := rawdb.ReadCanonicalHash(db, u.UnwindPoint)
 	if err != nil {
 		return fmt.Errorf("read canonical hash: %w", err)
@@ -491,6 +491,7 @@ func unwindIntermediateHashesStageImpl(logPrefix string, u *UnwindState, s *Stag
 	p.TempDir = tmpdir
 	rl := trie.NewRetainList(0)
 	collect := func(k, v []byte, _ etl.CurrentTableReader, _ etl.LoadNextFunc) error {
+		fmt.Printf("ex: %x,%t\n", k, len(v) == 0)
 		rl.AddKeyWithMarker(k, len(v) == 0)
 		return nil
 	}
