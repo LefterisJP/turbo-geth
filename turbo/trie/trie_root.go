@@ -1697,12 +1697,10 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *Storage
 			goto SkipAccounts
 		}
 
-		fmt.Printf("8:%x\n", accSeek)
 		if err := cache.WalkAccounts(accSeek, func(addrHash common.Hash, acc *accounts.Account) (bool, error) {
 			if err := common.Stopped(quit); err != nil {
 				return false, err
 			}
-			fmt.Printf("9:%x\n", addrHash)
 			i2++
 			hexutil.DecompressNibbles(addrHash.Bytes(), &l.kHex)
 			if keyIsBefore(ihK, l.kHex) || !bytes.HasPrefix(l.kHex, prefix) { // read all accounts until next AccTrie

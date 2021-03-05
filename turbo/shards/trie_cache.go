@@ -729,10 +729,8 @@ func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Ha
 	seek := &AccountSeek{seek: prefix}
 	id := id(seek)
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		fmt.Printf("seek: %x,%T\n", seek, i)
 		switch it := i.(type) {
 		case *AccountItem:
-			fmt.Printf("seek1: %x,%x\n", seek, it.addrHash)
 			if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 				return true
 			}
@@ -742,7 +740,6 @@ func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Ha
 				return false
 			}
 		case *AccountWriteItem:
-			fmt.Printf("seek2: %x,%x\n", seek, it.ai.addrHash)
 			if it.ai.HasFlag(AbsentFlag) || it.ai.HasFlag(DeletedFlag) {
 				return true
 			}
