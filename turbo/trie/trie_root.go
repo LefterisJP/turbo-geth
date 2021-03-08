@@ -1114,7 +1114,7 @@ func (c *StorageTrieCursor) _seek(seek, withinPrefix []byte) (bool, error) {
 		//	return false, err
 		//}
 		//if len(k) > c.lvl && c.childID[c.lvl] > int8(bits.TrailingZeros16(c.hasTree[c.lvl])) {
-		//	c.is++
+		c.is++
 		k, v, err = c.c.Seek(seek)
 		//}
 	}
