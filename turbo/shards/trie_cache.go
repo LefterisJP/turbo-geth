@@ -458,18 +458,15 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 	_seek(prefix, []byte{})
 
 	var toChild bool
+	var hash common.Hash
 	for k[lvl] != nil && bytes.HasPrefix(k[lvl], prefix) { // go to sibling in cache
 		cur = append(append(cur[:0], k[lvl]...), uint8(id[lvl]))
 		if _hasHash() {
-			toChild, err = walker(cur, hashes[lvl][hashID[lvl]], _hasTree(), true)
-			if err != nil {
-				return err
-			}
-		} else {
-			toChild, err = walker(cur, common.Hash{}, _hasTree(), false)
-			if err != nil {
-				return err
-			}
+			hash = hashes[lvl][hashID[lvl]]
+		}
+		toChild, err = walker(cur, hash, _hasTree(), _hasHash())
+		if err != nil {
+			return err
 		}
 
 		// preOrderTraversalStep
