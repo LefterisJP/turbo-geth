@@ -412,7 +412,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
 		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.AccountHashesSeek(seek)
-		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process
+		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process, even if ihK==nil
 			if !bytes.HasPrefix(ihK, withinPrefix) {
 				return false
 			}
