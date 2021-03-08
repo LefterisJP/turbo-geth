@@ -1134,6 +1134,17 @@ func (c *StorageTrieCursor) _seek(seek, withinPrefix []byte) (bool, error) {
 			return false, nil
 		}
 	}
+	if len(prefix) > 0 {
+		if !bytes.HasPrefix(k, c.accWithInc) || !bytes.HasPrefix(k[40:], prefix) {
+			return false, nil
+		}
+	} else {
+		if !bytes.HasPrefix(k, c.accWithInc) {
+			c.k[c.lvl] = nil
+			return false, nil
+		}
+	}
+
 	c._unmarshal(k, v)
 	return true, nil
 }
@@ -1472,7 +1483,12 @@ func CastTrieNodeValue(hashes, rootHash []byte) []common.Hash {
 func collectMissedAccTrie(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
 	var misses [][]byte
 	if err := cache.AccountTree("collectMissedAccTrie", prefix, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-		if k == nil || !hasTree || !hasHash {
+		if k == nil {
+			return hasTree, nil
+		}
+
+		fmt.Printf("visit: %x,%t\n", k, hasTree)
+		if !hasHash {
 			return hasTree, nil
 		}
 
@@ -1683,6 +1699,7 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		skipState = skipState && hasTree
 		if doDelete {
+			fmt.Printf("del:%x\n", k[:len(k)-1])
 			// TODO: delete by hash collector and add protection from double-delete
 			cache.SetAccountHashDelete(k[:len(k)-1])
 		}
