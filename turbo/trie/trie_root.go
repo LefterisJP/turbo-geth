@@ -1473,15 +1473,9 @@ func CastTrieNodeValue(hashes, rootHash []byte) []common.Hash {
 func collectMissedAccTrie(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
 	var misses [][]byte
 	if err := cache.AccountTree("collectMissedAccTrie", prefix, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-		if k == nil {
+		if k == nil || !hasHash {
 			return hasTree, nil
 		}
-
-		fmt.Printf("visit: %x,%t\n", k, hasTree)
-		if !hasHash {
-			return hasTree, nil
-		}
-
 		if ok, _ := canUse(k); ok {
 			return false, nil
 		}
@@ -1544,8 +1538,8 @@ func loadAccsToCache(accs ethdb.Cursor, accMisses [][]byte, canUse func([]byte) 
 				return true, nil
 			}
 
-			if err := cache.StorageTree(accountHash, incarnation, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-				if k == nil || !hasTree || !hasHash {
+			if err := cache.StorageTree("loadAccsToCache", accountHash, incarnation, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+				if k == nil || !hasHash {
 					return hasTree, nil
 				}
 				if ok, _ = canUse(k); ok {
@@ -1696,6 +1690,47 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		return hasTree, nil
 	}, onMiss)
 }
+
+//func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash []byte, incarnation uint64, doDelete bool, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
+//	var prev []byte
+//	_, nextCreated := canUse(prefix)
+//	skipState := true
+//	return cache.StorageTree(logPrefix, accHash, incarnation, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+//		if k == nil {
+//			endOfWorld := !dbutils.NextNibblesSubtree(prev, &l.accSeek)
+//			l.accSeek = firstNotCoveredPrefix(prev, prefix, l.accSeek)
+//			skipState = skipState && prev != nil && (endOfWorld || !bytes.HasPrefix(l.accSeek, prefix))
+//			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
+//		}
+//		if !hasTree && !hasHash {
+//			skipState = false
+//			return hasTree, nil
+//		}
+//		if !hasHash {
+//			return hasTree, nil
+//		}
+//
+//		if ok, newNextCreated := canUse(k); ok {
+//			skipState = skipState && keyIsBefore(k, nextCreated)
+//			nextCreated = newNextCreated
+//			l.accSeek = firstNotCoveredPrefix(prev, prefix, l.accSeek)
+//			//fmt.Printf("walk:%s,%x,%t\n", logPrefix, k, skipState)
+//			if err = walker(k, h, hasTree, skipState, l.accSeek); err != nil {
+//				return false, err
+//			}
+//			prev = append(prev[:0], k...)
+//			skipState = true
+//			return false, nil
+//		}
+//		skipState = skipState && hasTree
+//		if doDelete {
+//			fmt.Printf("del:%x\n", k[:len(k)-1])
+//			// TODO: delete by hash collector and add protection from double-delete
+//			cache.SetAccountHashDelete(k[:len(k)-1])
+//		}
+//		return hasTree, nil
+//	}, onMiss)
+//}
 
 func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *StorageTrieCursor, prefix []byte, cache *shards.StateCache, quit <-chan struct{}) (common.Hash, error) {
 	l.accSeek = make([]byte, 0, 64)

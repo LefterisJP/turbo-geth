@@ -490,7 +490,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 	return nil
 }
 
-func (sc *StateCache) StorageTree(accHash common.Hash, incarnation uint64, walker Walker, onMiss OnMiss) (err error) {
+func (sc *StateCache) StorageTree(logPrefix string, accHash common.Hash, incarnation uint64, walker Walker, onMiss OnMiss) (err error) {
 	var cur []byte
 	buf := make([]byte, 0, 64)
 	next := make([]byte, 0, 64)
