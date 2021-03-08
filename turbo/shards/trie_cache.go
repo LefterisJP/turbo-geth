@@ -432,6 +432,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 					return false
 				}
 				next = append(append(next[:0], k[lvl]...), uint8(id[lvl]))
+				buf = append(append(buf[:0], k[nonNilLvl]...), uint8(id[nonNilLvl]))
 				if _seek(next, buf) {
 					return true
 				}
@@ -461,6 +462,9 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 		cur = append(append(cur[:0], k[lvl]...), uint8(id[lvl]))
 		if _hasHash() {
 			toChild, err = walker(cur, hashes[lvl][hashID[lvl]], _hasTree(), true)
+			if err != nil {
+				return err
+			}
 		} else {
 			toChild, err = walker(cur, common.Hash{}, _hasTree(), false)
 			if err != nil {
@@ -470,10 +474,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 
 		// preOrderTraversalStep
 		if toChild && _hasTree() {
-			next = append(append(next[:0], k[lvl]...), uint8(id[lvl]))
-			ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, ok := sc.GetAccountHash(next)
-			if ok {
-				_unmarshal(ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem)
+			if _seek(cur, cur) {
 				continue
 			}
 			onMiss(cur)

@@ -1599,18 +1599,23 @@ func (l *FlatDBTrieLoader) collectMissedAccounts(canUse func([]byte) (bool, []by
 		if k == nil {
 			return hasTree, nil
 		}
-		if !hasHash {
+		if !hasHash && !hasTree { // no hash, no tree, but has state
 			if !cache.HasAccountWithInPrefix(k) {
 				misses = append(misses, common.CopyBytes(k))
 			}
+			fmt.Printf("a: %x,%t\n", k, hasTree)
 			return hasTree, nil
 		}
 		if ok, _ := canUse(k); ok {
+			fmt.Printf("b: %x,%t\n", k, hasTree)
 			return false, nil
 		}
-		if !cache.HasAccountWithInPrefix(k) {
-			misses = append(misses, common.CopyBytes(k))
+		if !hasTree {
+			if !cache.HasAccountWithInPrefix(k) {
+				misses = append(misses, common.CopyBytes(k))
+			}
 		}
+		fmt.Printf("d: %x,%t\n", k, hasTree)
 		return hasTree, common.Stopped(quit)
 	}, func(k []byte) {
 		panic(fmt.Errorf("key %x not found in cache", k))
