@@ -368,12 +368,13 @@ func (sc *StateCache) DebugPrintAccounts() error {
 	return nil
 }
 
-func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) (err error) {
+type Walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error)
+type OnMiss func(k []byte)
+
+func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker, onMiss OnMiss) (err error) {
 	var cur []byte
-	seek := make([]byte, 0, 64)
 	buf := make([]byte, 0, 64)
 	next := make([]byte, 0, 64)
-	seek = append(seek, prefix...)
 	var k [64][]byte
 	var hasTree, hasState, hasHash [64]uint16
 	var hashID [64]int16
@@ -459,7 +460,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 
 	var toChild bool
 	var hash common.Hash
-	for k[lvl] != nil && bytes.HasPrefix(k[lvl], prefix) { // go to sibling in cache
+	for k[lvl] != nil { // go to sibling in cache
 		cur = append(append(cur[:0], k[lvl]...), uint8(id[lvl]))
 		if _hasHash() {
 			hash = hashes[lvl][hashID[lvl]]
@@ -485,27 +486,33 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker func(k
 	return nil
 }
 
-func (sc *StateCache) StorageTree(prefix []byte, accHash common.Hash, incarnation uint64, walker func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error), onMiss func(k []byte)) error {
+func (sc *StateCache) StorageTree(accHash common.Hash, incarnation uint64, walker Walker, onMiss OnMiss) (err error) {
 	var cur []byte
-	seek := make([]byte, 0, 64)
 	buf := make([]byte, 0, 64)
 	next := make([]byte, 0, 64)
-	seek = append(seek, prefix...)
 	var k [64][]byte
 	var hasTree, hasState, hasHash [64]uint16
-	var id, hashID [64]int16
+	var hashID [64]int16
+	var id [64]int8
 	var hashes [64][]common.Hash
 	var lvl int
-	var ok bool
-	var (
-		ihK                                    []byte
-		hasStateItem, hasTreeItem, hasHashItem uint16
-		hashItem                               []common.Hash
-	)
 	var _hasChild = func() bool { return (1<<id[lvl])&hasState[lvl] != 0 }
-	var _hasBranch = func() bool { return (1<<id[lvl])&hasTree[lvl] != 0 }
+	var _hasTree = func() bool { return (1<<id[lvl])&hasTree[lvl] != 0 }
 	var _hasHash = func() bool { return (1<<id[lvl])&hasHash[lvl] != 0 }
-	var _unmarshal = func() {
+	var _nextSiblingInMem = func() bool {
+		for id[lvl]++; id[lvl] < int8(bits.Len16(hasState[lvl])); id[lvl]++ { // go to sibling
+			if !_hasChild() {
+				continue
+			}
+
+			if _hasHash() {
+				hashID[lvl]++
+			}
+			return true
+		}
+		return false
+	}
+	var _unmarshal = func(ihK []byte, hasStateItem, hasTreeItem, hasHashItem uint16, hashItem []common.Hash) {
 		from, to := lvl+1, len(k)
 		if lvl >= len(k) {
 			from, to = len(k)+1, lvl+2
@@ -515,39 +522,30 @@ func (sc *StateCache) StorageTree(prefix []byte, accHash common.Hash, incarnatio
 		}
 		lvl = len(ihK)
 		k[lvl], hasState[lvl], hasTree[lvl], hasHash[lvl], hashes[lvl] = ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem
-		hashID[lvl], id[lvl] = -1, int16(bits.TrailingZeros16(hasStateItem))-1
-	}
-	var _nextSiblingInMem = func() bool {
-		for id[lvl]++; id[lvl] < int16(bits.Len16(hasState[lvl])); id[lvl]++ { // go to sibling
-			if !_hasChild() {
-				continue
-			}
-
-			if _hasHash() {
-				hashID[lvl]++
-				return true
-			}
-			if _hasBranch() {
-				return true
-			}
-		}
-		return false
+		hashID[lvl], id[lvl] = -1, int8(bits.TrailingZeros16(hasState[lvl]))-1
+		_nextSiblingInMem()
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
-		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem = sc.StorageHashesSeek(accHash, incarnation, seek)
-		if ihK == nil || !bytes.HasPrefix(ihK, withinPrefix) || !bytes.HasPrefix(ihK, prefix) {
-			k[lvl] = nil
+		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.StorageHashesSeek(accHash, incarnation, seek)
+		if ihK == nil {
+			k[lvl] = nil // end of overall process
 			return false
 		}
-		_unmarshal()
-		_nextSiblingInMem()
+		if !bytes.HasPrefix(ihK, withinPrefix) { // not end of overall process
+			return false
+		}
+		_unmarshal(ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem)
 		return true
 	}
 	var _nextSiblingOfParentInMem = func() bool {
 		for lvl > 0 { // go to parent sibling in mem
 			if k[lvl-1] == nil {
 				nonNilLvl := lvl - 1
-				for ; k[nonNilLvl] == nil && nonNilLvl > 1; nonNilLvl-- {
+				for k[nonNilLvl] == nil && nonNilLvl > 1 {
+					nonNilLvl--
+				}
+				if k[nonNilLvl] == nil { // if no parent found
+					return false
 				}
 				next = append(append(next[:0], k[lvl]...), uint8(id[lvl]))
 				buf = append(append(buf[:0], k[nonNilLvl]...), uint8(id[nonNilLvl]))
@@ -558,7 +556,6 @@ func (sc *StateCache) StorageTree(prefix []byte, accHash common.Hash, incarnatio
 				continue
 			}
 			lvl--
-			// END of _nextSiblingOfParentInMem
 			if _nextSiblingInMem() {
 				return true
 			}
@@ -566,29 +563,31 @@ func (sc *StateCache) StorageTree(prefix []byte, accHash common.Hash, incarnatio
 		return false
 	}
 	var _nextSiblingInDB = func() bool {
-		if ok = dbutils.NextNibblesSubtree(k[lvl], &seek); !ok {
+		if ok := dbutils.NextNibblesSubtree(k[lvl], &next); !ok {
 			k[lvl] = nil
 			return false
 		}
-		_seek(seek, []byte{})
+		_seek(next, []byte{})
 		return k[lvl] != nil
 	}
 
-	_seek(prefix, []byte{})
+	_seek([]byte{}, []byte{})
 
-	for k[lvl] != nil && bytes.HasPrefix(k[lvl], prefix) { // go to sibling in cache
+	var toChild bool
+	var hash common.Hash
+	for k[lvl] != nil { // go to sibling in cache
 		cur = append(append(cur[:0], k[lvl]...), uint8(id[lvl]))
-		toChild, err := walker(cur, hashes[lvl][hashID[lvl]], _hasBranch(), _hasHash())
+		if _hasHash() {
+			hash = hashes[lvl][hashID[lvl]]
+		}
+		toChild, err = walker(cur, hash, _hasTree(), _hasHash())
 		if err != nil {
 			return err
 		}
 
-		if toChild && _hasBranch() {
-			next = append(append(next[:0], k[lvl]...), uint8(id[lvl]))
-			ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, ok = sc.GetStorageHash(accHash, incarnation, next)
-			if ok {
-				_unmarshal()
-				_nextSiblingInMem()
+		// preOrderTraversalStep
+		if toChild && _hasTree() {
+			if _seek(cur, cur) {
 				continue
 			}
 			onMiss(cur)
@@ -596,7 +595,7 @@ func (sc *StateCache) StorageTree(prefix []byte, accHash common.Hash, incarnatio
 		_ = _nextSiblingInMem() || _nextSiblingOfParentInMem() || _nextSiblingInDB()
 	}
 
-	if _, err := walker(nil, common.Hash{}, false, false); err != nil {
+	if _, err = walker(nil, common.Hash{}, false, false); err != nil {
 		return err
 	}
 	return nil

@@ -1538,7 +1538,7 @@ func loadAccsToCache(accs ethdb.Cursor, accMisses [][]byte, canUse func([]byte) 
 				return true, nil
 			}
 
-			if err := cache.StorageTree([]byte{}, accountHash, incarnation, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+			if err := cache.StorageTree(accountHash, incarnation, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 				if k == nil || !hasTree || !hasHash {
 					return hasTree, nil
 				}
