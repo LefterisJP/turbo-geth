@@ -807,7 +807,7 @@ func (c *AccTrieCursor) _seek(seek []byte, withinPrefix []byte) (bool, error) {
 			return false, nil
 		}
 		if !bytes.HasPrefix(k, c.prefix) {
-			c.k[c.lvl] = nil
+			c.k[c.lvl] = nil // seek over global prefix does terminate overall process
 			return false, nil
 		}
 	}
