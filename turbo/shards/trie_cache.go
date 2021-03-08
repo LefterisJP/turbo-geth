@@ -412,12 +412,8 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
 		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.AccountHashesSeek(seek)
-		if ihK == nil {
-			k[lvl] = nil // end of overall process
-			return false
-		}
-		if len(withinPrefix) > 0 {
-			if !bytes.HasPrefix(ihK, withinPrefix) { // not end of overall process
+		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process
+			if !bytes.HasPrefix(ihK, withinPrefix) {
 				return false
 			}
 		} else {
@@ -472,7 +468,6 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 		if _hasHash() {
 			hash = hashes[lvl][hashID[lvl]]
 		}
-		fmt.Printf("c %s: %x,%t,%t\n", logPrefix, cur, _hasTree(), _hasHash())
 		toChild, err = walker(cur, hash, _hasTree(), _hasHash())
 		if err != nil {
 			return err
@@ -481,16 +476,12 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 		// preOrderTraversalStep
 		if toChild && _hasTree() {
 			if _seek(cur, cur) {
-				fmt.Printf("found: %x->%x,%b,%b\n", cur, k[lvl], hasTree[lvl], hasHash[lvl])
 				continue
 			}
 
-			fmt.Printf("not found: %x\n", cur)
 			onMiss(cur)
 		}
-		fmt.Printf("a: %x,%x,%b,%b\n", k[lvl], id[lvl], hasTree[lvl], hasHash[lvl])
 		_ = _nextSiblingInMem() || _nextSiblingOfParentInMem() || _nextSiblingInDB()
-		fmt.Printf("b: %x,%x,%b,%b\n", k[lvl], id[lvl], hasTree[lvl], hasHash[lvl])
 	}
 
 	if _, err = walker(nil, common.Hash{}, false, false); err != nil {
@@ -540,12 +531,15 @@ func (sc *StateCache) StorageTree(accHash common.Hash, incarnation uint64, walke
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
 		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.StorageHashesSeek(accHash, incarnation, seek)
-		if ihK == nil {
-			k[lvl] = nil // end of overall process
-			return false
-		}
-		if !bytes.HasPrefix(ihK, withinPrefix) { // not end of overall process
-			return false
+		if len(withinPrefix) > 0 {
+			if !bytes.HasPrefix(ihK, withinPrefix) {
+				return false
+			}
+		} else {
+			if ihK == nil {
+				k[lvl] = nil // end of overall process
+				return false
+			}
 		}
 		_unmarshal(ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem)
 		return true

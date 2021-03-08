@@ -1134,16 +1134,6 @@ func (c *StorageTrieCursor) _seek(seek, withinPrefix []byte) (bool, error) {
 			return false, nil
 		}
 	}
-	if len(prefix) > 0 {
-		if !bytes.HasPrefix(k, c.accWithInc) || !bytes.HasPrefix(k[40:], prefix) {
-			return false, nil
-		}
-	} else {
-		if !bytes.HasPrefix(k, c.accWithInc) {
-			c.k[c.lvl] = nil
-			return false, nil
-		}
-	}
 
 	c._unmarshal(k, v)
 	return true, nil
