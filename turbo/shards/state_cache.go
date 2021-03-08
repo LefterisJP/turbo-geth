@@ -444,7 +444,6 @@ func (sc *StateCache) GetAccount(address []byte) (*accounts.Account, bool) {
 }
 
 func (sc *StateCache) HasAccountWithInPrefix(addrHashPrefix []byte) bool {
-	AccRead.Inc(1)
 	seek := &AccountSeek{seek: addrHashPrefix}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {

@@ -612,11 +612,9 @@ func assertSubset(a, b uint16) {
 }
 
 func cacheWarmUpIfNeed(db ethdb.Database, cache *shards.StateCache) error {
-	if cache.HasAccountWithInPrefix([]byte{0}) {
+	if cache.HasAccountTrieWithPrefix([]byte{0}) {
 		return nil
 	}
-
-	//TODO: re-implement by seeks - don't scan full table
 	if err := db.Walk(dbutils.TrieOfAccountsBucket, nil, 0, func(k, v []byte) (bool, error) {
 		if len(k) > 2 {
 			return true, nil

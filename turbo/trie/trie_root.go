@@ -1475,6 +1475,7 @@ func collectMissedAccTrie(canUse func([]byte) (bool, []byte), prefix []byte, cac
 		if k == nil || !hasTree || !hasHash {
 			return hasTree, nil
 		}
+
 		if ok, _ := canUse(k); ok {
 			return false, nil
 		}
@@ -1484,6 +1485,7 @@ func collectMissedAccTrie(canUse func([]byte) (bool, []byte), prefix []byte, cac
 	}); err != nil {
 		return nil, err
 	}
+
 	return misses, nil
 }
 
@@ -1588,6 +1590,11 @@ func loadStorageToCache(ss ethdb.Cursor, misses [][]byte, cache *shards.StateCac
 
 func (l *FlatDBTrieLoader) collectMissedAccounts(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
 	var misses [][]byte
+	if !cache.HasAccountTrieWithPrefix(prefix) {
+		misses = append(misses, prefix)
+		return misses, nil
+	}
+
 	return misses, cache.AccountTree("collectMissedAccounts", prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 		if k == nil {
 			return hasTree, nil

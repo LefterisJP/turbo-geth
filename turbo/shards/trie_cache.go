@@ -623,6 +623,11 @@ func (sc *StateCache) AccountHashesSeek(prefix []byte) ([]byte, uint16, uint16, 
 	return cur.addrHashPrefix, cur.hasState, cur.hasTree, cur.hasHash, cur.hashes
 }
 
+func (sc *StateCache) HasAccountTrieWithPrefix(prefix []byte) bool {
+	found, _, _, _, _ := sc.AccountHashesSeek(prefix)
+	return bytes.HasPrefix(found, prefix)
+}
+
 func (sc *StateCache) StorageHashesSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
 	var cur *StorageHashItem
 	seek := &StorageHashItem{}
