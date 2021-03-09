@@ -1402,12 +1402,8 @@ func keyIsBefore(k1, k2 []byte) bool {
 	return bytes.Compare(k1, k2) < 0
 }
 
-func UnmarshalTrieNodeTyped(v []byte) (hasState, hasTree, hasHash uint16, hashes []common.Hash, rootHash common.Hash) {
+func UnmarshalTrieNodeTyped(v []byte) (hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	hasState, hasTree, hasHash, v = binary.BigEndian.Uint16(v), binary.BigEndian.Uint16(v[2:]), binary.BigEndian.Uint16(v[4:]), v[6:]
-	if bits.OnesCount16(hasHash)+1 == len(v)/common.HashLength {
-		rootHash.SetBytes(common.CopyBytes(v[:32]))
-		v = v[32:]
-	}
 	hashes = make([]common.Hash, len(v)/common.HashLength)
 	for i := 0; i < len(hashes); i++ {
 		hashes[i].SetBytes(common.CopyBytes(v[i*common.HashLength : (i+1)*common.HashLength]))
@@ -1500,8 +1496,27 @@ func loadAccTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cache *
 			if !bytes.HasPrefix(k, miss) || !bytes.HasPrefix(k, prefix) { // read all accounts until next AccTrie
 				break
 			}
-			hasState, hasTree, hasHash, newV, _ := UnmarshalTrieNodeTyped(v)
+			hasState, hasTree, hasHash, newV := UnmarshalTrieNodeTyped(v)
 			cache.SetAccountHashesRead(k, hasState, hasTree, hasHash, newV)
+		}
+	}
+	return nil
+}
+
+func loadStorageTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
+	for _, miss := range misses {
+		if err := common.Stopped(quit); err != nil {
+			return err
+		}
+		for k, v, err := ih.Seek(miss); k != nil; k, v, err = ih.Next() {
+			if err != nil {
+				return err
+			}
+			if !bytes.HasPrefix(k, miss) || !bytes.HasPrefix(k, prefix) { // read all accounts until next AccTrie
+				break
+			}
+			hasState, hasTree, hasHash, hashes := UnmarshalTrieNodeTyped(v)
+			cache.SetStorageHashRead(common.BytesToHash(k[:32]), binary.BigEndian.Uint64(k[32:]), k[40:], hasState, hasTree, hasHash, hashes)
 		}
 	}
 	return nil
@@ -1544,7 +1559,6 @@ func loadAccsToCache(accs ethdb.Cursor, accMisses [][]byte, canUse func([]byte) 
 				if ok, _ = canUse(k); ok {
 					return false, nil
 				}
-
 				return hasTree, common.Stopped(quit)
 			}, func(k []byte) {
 				misses = append(misses, common.CopyBytes(k))
@@ -1598,6 +1612,37 @@ func (l *FlatDBTrieLoader) collectMissedAccounts(canUse func([]byte) (bool, []by
 		if k == nil {
 			return hasTree, nil
 		}
+		if !hasHash && !hasTree { // nko hash, no tree, but has state
+			if !cache.HasAccountWithInPrefix(k) {
+				misses = append(misses, common.CopyBytes(k))
+			}
+			return hasTree, nil
+		}
+		if ok, _ := canUse(k); ok {
+			return false, nil
+		}
+		if !hasTree {
+			if !cache.HasAccountWithInPrefix(k) {
+				misses = append(misses, common.CopyBytes(k))
+			}
+		}
+		return hasTree, common.Stopped(quit)
+	}, func(k []byte) {
+		panic(fmt.Errorf("key %x not found in cache", k))
+	})
+}
+
+func (l *FlatDBTrieLoader) collectMissedStorages(canUse func([]byte) (bool, []byte), prefix []byte, cache *shards.StateCache, quit <-chan struct{}) ([][]byte, error) {
+	var misses [][]byte
+	if !cache.HasAccountTrieWithPrefix(prefix) {
+		misses = append(misses, prefix)
+		return misses, nil
+	}
+
+	return misses, cache.AccountTree("collectMissedAccounts", prefix, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+		if k == nil {
+			return hasTree, nil
+		}
 		if !hasHash && !hasTree { // no hash, no tree, but has state
 			if !cache.HasAccountWithInPrefix(k) {
 				misses = append(misses, common.CopyBytes(k))
@@ -1628,7 +1673,6 @@ func (l *FlatDBTrieLoader) prep(accs, st, trieAcc ethdb.Cursor, prefix []byte, c
 	if err != nil {
 		return err
 	}
-	fmt.Printf("accIHMisses:%x\n", accIHMisses)
 	err = loadAccTrieToCache(trieAcc, prefix, accIHMisses, cache, quit)
 	if err != nil {
 		return err
@@ -1637,12 +1681,19 @@ func (l *FlatDBTrieLoader) prep(accs, st, trieAcc ethdb.Cursor, prefix []byte, c
 	if err != nil {
 		return err
 	}
-	fmt.Printf("accMisses:%x\n", accMisses)
 	storageIHMisses, err := loadAccsToCache(accs, accMisses, canUse, cache, quit)
 	if err != nil {
 		return err
 	}
-	err = loadStorageToCache(st, storageIHMisses, cache, quit)
+	err = loadStorageTrieToCache(trieAcc, prefix, storageIHMisses, cache, quit)
+	if err != nil {
+		return err
+	}
+	stMisses, err := l.collectMissedStorages(canUse, prefix, cache, quit)
+	if err != nil {
+		return err
+	}
+	err = loadStorageToCache(st, stMisses, cache, quit)
 	if err != nil {
 		return err
 	}

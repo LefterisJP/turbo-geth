@@ -255,6 +255,14 @@ func (sc *StateCache) SetAccountHashDelete(prefix []byte) {
 }
 
 func (sc *StateCache) SetStorageHashRead(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+	if bits.OnesCount16(hasHash) != len(hashes) {
+		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
+		if !isValid {
+			panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
+		}
+	}
+	assertSubset(hasTree, hasState)
+	assertSubset(hasHash, hasState)
 	cpy := make([]common.Hash, len(hashes))
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
@@ -272,6 +280,14 @@ func (sc *StateCache) SetStorageHashRead(addrHash common.Hash, incarnation uint6
 }
 
 func (sc *StateCache) SetStorageHashWrite(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+	if bits.OnesCount16(hasHash) != len(hashes) {
+		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
+		if !isValid {
+			panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
+		}
+	}
+	assertSubset(hasTree, hasState)
+	assertSubset(hasHash, hasState)
 	cpy := make([]common.Hash, len(hashes))
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
@@ -291,6 +307,14 @@ func (sc *StateCache) SetStorageHashWrite(addrHash common.Hash, incarnation uint
 }
 
 func (sc *StateCache) SetStorageHashDelete(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+	if bits.OnesCount16(hasHash) != len(hashes) {
+		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
+		if !isValid {
+			panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
+		}
+	}
+	assertSubset(hasTree, hasState)
+	assertSubset(hasHash, hasState)
 	cpy := make([]common.Hash, len(hashes))
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
@@ -312,16 +336,6 @@ func (sc *StateCache) SetStorageHashDelete(addrHash common.Hash, incarnation uin
 func (sc *StateCache) AccountHashCount() int {
 	var key AccountSeek
 	return sc.readWrites[id(key)].Len()
-}
-
-func (sc *StateCache) HasAccountHashWithPrefix(addrHashPrefix []byte) bool {
-	seek := &AccountHashItem{addrHashPrefix: addrHashPrefix}
-	var found bool
-	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		found = bytes.HasPrefix(i.(*AccountHashItem).addrHashPrefix, addrHashPrefix)
-		return false
-	})
-	return found
 }
 
 func (sc *StateCache) GetAccountHash(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {

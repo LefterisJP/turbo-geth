@@ -453,6 +453,17 @@ func (sc *StateCache) HasAccountWithInPrefix(addrHashPrefix []byte) bool {
 	return found
 }
 
+func (sc *StateCache) HasStorageWithInPrefix(addrHash common.Hash, incarnation uint64, locHashPrefix []byte) bool {
+	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashPrefix}
+	var found bool
+	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
+		ii := i.(*StorageItem)
+		found = ii.addrHash == addrHash && ii.incarnation == incarnation && bytes.HasPrefix(ii.locHash.Bytes(), locHashPrefix)
+		return false
+	})
+	return found
+}
+
 // GetDeletedAccount attempts to retrieve the last version of account before it was deleted
 func (sc *StateCache) GetDeletedAccount(address []byte) *accounts.Account {
 	key := &AccountItem{}
