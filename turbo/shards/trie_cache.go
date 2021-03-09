@@ -413,12 +413,19 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
 		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.AccountHashesSeek(seek)
 		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process, even if ihK==nil
+			if ihK == nil {
+				return false
+			}
 			if !bytes.HasPrefix(ihK, withinPrefix) {
 				return false
 			}
-		} else {
+		} else { // seek in global prefix - does finish overall process
+			if ihK == nil {
+				k[lvl] = nil
+				return false
+			}
 			if !bytes.HasPrefix(ihK, prefix) {
-				k[lvl] = nil // end of overall process
+				k[lvl] = nil
 				return false
 			}
 		}
@@ -530,14 +537,17 @@ func (sc *StateCache) StorageTree(logPrefix string, accHash common.Hash, incarna
 		_nextSiblingInMem()
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
-		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.StorageHashesSeek(accHash, incarnation, seek)
-		if len(withinPrefix) > 0 {
+		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.StorageTrieSeek(accHash, incarnation, seek)
+		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process, even if ihK==nil
+			if ihK == nil {
+				return false
+			}
 			if !bytes.HasPrefix(ihK, withinPrefix) {
 				return false
 			}
-		} else {
+		} else { // seek in global prefix - does finish overall process
 			if ihK == nil {
-				k[lvl] = nil // end of overall process
+				k[lvl] = nil
 				return false
 			}
 		}
@@ -632,7 +642,7 @@ func (sc *StateCache) HasAccountTrieWithPrefix(prefix []byte) bool {
 	return bytes.HasPrefix(found, prefix)
 }
 
-func (sc *StateCache) StorageHashesSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
+func (sc *StateCache) StorageTrieSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
 	var cur *StorageHashItem
 	seek := &StorageHashItem{}
 	id := id(seek)
