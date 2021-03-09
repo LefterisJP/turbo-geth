@@ -1690,59 +1690,56 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 	}, onMiss)
 }
 
-//func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash []byte, incarnation uint64, doDelete bool, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
-//	var prev []byte
-//	buf := make([]byte, 8)
-//	binary.BigEndian.PutUint64(buf, incarnation)
-//	kBuf := make([]byte, 80)
-//	hexutil.DecompressNibbles(accHash, &kBuf)
-//	incBuffer := kBuf[2*common.HashLength:]
-//	hexutil.DecompressNibbles(buf, &incBuffer)
-//	_, nextCreated := canUse(kBuf)
-//	skipState := true
-//	return cache.StorageTree(logPrefix, common.BytesToHash(accHash), incarnation, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-//		if k == nil {
-//			endOfWorld := !dbutils.NextNibblesSubtree(prev, &l.accSeek)
-//			l.storageSeek = firstNotCoveredPrefix(prev, []byte{0, 0}, l.storageSeek)
-//			skipState = skipState && prev != nil && (endOfWorld || !bytes.HasPrefix(l.storageSeek, prefix))
-//			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
-//		}
-//		if !hasTree && !hasHash {
-//			skipState = false
-//			return hasTree, nil
-//		}
-//		if !hasHash {
-//			return hasTree, nil
-//		}
-//
-//		if ok, newNextCreated := canUse(k); ok {
-//			skipState = skipState && keyIsBefore(k, nextCreated)
-//			nextCreated = newNextCreated
-//			l.accSeek = firstNotCoveredPrefix(prev, prefix, l.accSeek)
-//			//fmt.Printf("walk:%s,%x,%t\n", logPrefix, k, skipState)
-//			if err = walker(k, h, hasTree, skipState, l.accSeek); err != nil {
-//				return false, err
-//			}
-//			prev = append(prev[:0], k...)
-//			skipState = true
-//			return false, nil
-//		}
-//		skipState = skipState && hasTree
-//		if doDelete {
-//			fmt.Printf("del:%x\n", k[:len(k)-1])
-//			// TODO: delete by hash collector and add protection from double-delete
-//			cache.SetAccountHashDelete(k[:len(k)-1])
-//		}
-//		return hasTree, nil
-//	}, onMiss)
-//}
+func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash, incarnation uint64, doDelete bool, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
+	var prev []byte
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, incarnation)
+	kBuf := make([]byte, 80)
+	hexutil.DecompressNibbles(accHash.Bytes(), &kBuf)
+	incBuffer := kBuf[2*common.HashLength:]
+	hexutil.DecompressNibbles(buf, &incBuffer)
+	_, nextCreated := canUse(kBuf)
+	skipState := true
+	return cache.StorageTree(logPrefix, accHash, incarnation, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+		if k == nil {
+			endOfWorld := !dbutils.NextNibblesSubtree(prev, &l.storageSeek)
+			l.storageSeek = firstNotCoveredPrefix(prev, []byte{0, 0}, l.storageSeek)
+			skipState = skipState && prev != nil && endOfWorld
+			return hasTree, walker(k, h, hasTree, skipState, l.storageSeek)
+		}
+		if !hasTree && !hasHash {
+			skipState = false
+			return hasTree, nil
+		}
+		if !hasHash {
+			return hasTree, nil
+		}
 
-func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *StorageTrieCursor, prefix []byte, cache *shards.StateCache, quit <-chan struct{}) (common.Hash, error) {
+		if ok, newNextCreated := canUse(k); ok {
+			skipState = skipState && keyIsBefore(k, nextCreated)
+			nextCreated = newNextCreated
+			l.storageSeek = firstNotCoveredPrefix(prev, []byte{0, 0}, l.storageSeek)
+			if err = walker(k, h, hasTree, skipState, l.storageSeek); err != nil {
+				return false, err
+			}
+			prev = append(prev[:0], k...)
+			skipState = true
+			return false, nil
+		}
+		skipState = skipState && hasTree
+		if doDelete {
+			// TODO: delete by hash collector and add protection from double-delete
+			cache.SetAccountHashDelete(k[:len(k)-1])
+		}
+		return hasTree, nil
+	}, onMiss)
+}
+
+func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, prefix []byte, cache *shards.StateCache, quit <-chan struct{}) (common.Hash, error) {
 	l.accSeek = make([]byte, 0, 64)
 	logEvery := time.NewTicker(30 * time.Second)
 	defer logEvery.Stop()
 	defer func(t time.Time) { fmt.Printf("trie_root.go:375: %s\n", time.Since(t)) }(time.Now())
-	i2, i4 := 0, 0
 	var canUse = func(prefix []byte) (bool, []byte) {
 		retain, nextCreated := l.rd.RetainWithMarker(prefix)
 		return !retain, nextCreated
@@ -1757,7 +1754,6 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *Storage
 			if err := common.Stopped(quit); err != nil {
 				return false, err
 			}
-			i2++
 			hexutil.DecompressNibbles(addrHash.Bytes(), &l.kHex)
 			if keyIsBefore(ihK, l.kHex) || !bytes.HasPrefix(l.kHex, prefix) { // read all accounts until next AccTrie
 				return false, nil
@@ -1772,40 +1768,38 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, ihStorage *Storage
 			copy(l.accAddrHashWithInc[:], addrHash.Bytes())
 			binary.BigEndian.PutUint64(l.accAddrHashWithInc[32:], l.accountValue.Incarnation)
 			accWithInc := l.accAddrHashWithInc[:]
-			for ihKS, ihVS, hasTreeS, err2 := ihStorage.SeekToAccount(accWithInc); ; ihKS, ihVS, hasTreeS, err2 = ihStorage.Next() {
-				if err2 != nil {
-					return false, err2
-				}
-
-				if ihStorage.skipState {
+			if err := l.walkStorageTree("post", addrHash, l.accountValue.Incarnation, true, cache, canUse, func(ihKS []byte, ihVS common.Hash, hasTreeS, skipState bool, accSeek []byte) error {
+				if skipState {
 					goto SkipStorage
 				}
-				i4++
-
-				for vS, err3 := storages.SeekBothRange(accWithInc, ihStorage.FirstNotCoveredPrefix()); vS != nil; _, vS, err3 = storages.NextDup() {
+				for vS, err3 := storages.SeekBothRange(accWithInc, l.storageSeek); vS != nil; _, vS, err3 = storages.NextDup() {
 					if err3 != nil {
-						return false, err3
+						return err3
 					}
 					hexutil.DecompressNibbles(vS[:32], &l.kHexS)
 					if keyIsBefore(ihKS, l.kHexS) { // read until next AccTrie
 						break
 					}
 					if err := l.receiver.Receive(StorageStreamItem, accWithInc, common.CopyBytes(l.kHexS), nil, vS[32:], nil, false, 0); err != nil {
-						return false, err
+						return err
 					}
 				}
 
 			SkipStorage:
 				if ihKS == nil { // Loop termination
-					break
+					return nil
 				}
-
-				if err := l.receiver.Receive(SHashStreamItem, accWithInc, common.CopyBytes(ihKS), nil, nil, ihVS, hasTreeS, 0); err != nil {
-					return false, err
+				if err := l.receiver.Receive(SHashStreamItem, accWithInc, common.CopyBytes(ihKS), nil, nil, ihVS[:], hasTreeS, 0); err != nil {
+					return err
 				}
-				if len(ihKS) == 0 { // means we just sent acc.storageRoot
-					break
-				}
+				//if len(ihKS) == 0 { // means we just sent acc.storageRoot
+				//	break
+				//}
+				return nil
+			}, func(k []byte) {
+				panic(fmt.Errorf("key %x not found in cache", k))
+			}); err != nil {
+				panic(err)
 			}
 
 			select {
@@ -1861,11 +1855,6 @@ func (l *FlatDBTrieLoader) CalcSubTrieRootOnCache(tx ethdb.Tx, prefix []byte, ca
 		return EmptyRoot, err
 	}
 	defer trieStorageC.Close()
-	var canUse = func(prefix []byte) (bool, []byte) {
-		retain, nextCreated := l.rd.RetainWithMarker(prefix)
-		return !retain, nextCreated
-	}
-	trieStorage := StorageTrie(canUse, l.shc, trieStorageC, quit)
 
 	ss, err := tx.CursorDupSort(dbutils.HashedStorageBucket)
 	if err != nil {
@@ -1878,7 +1867,7 @@ func (l *FlatDBTrieLoader) CalcSubTrieRootOnCache(tx ethdb.Tx, prefix []byte, ca
 	if err := l.prep(accsC, stC, trieAccC, prefix, cache, quit); err != nil {
 		return EmptyRoot, err
 	}
-	if _, err := l.post(ss, trieStorage, prefix, cache, quit); err != nil {
+	if _, err := l.post(ss, prefix, cache, quit); err != nil {
 		return EmptyRoot, err
 	}
 	//fmt.Printf("%d,%d,%d,%d\n", i1, i2, i3, i4)
