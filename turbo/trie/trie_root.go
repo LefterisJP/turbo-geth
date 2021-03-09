@@ -758,7 +758,6 @@ func (c *AccTrieCursor) Next() (k, v []byte, hasTree bool, err error) {
 	if c.k[c.lvl] == nil {
 		c.cur = nil
 		c.SkipState = c.SkipState && !dbutils.NextNibblesSubtree(c.prev, &c.next)
-		fmt.Printf("alex: %x,%x\n", c.prev, c.next)
 		return nil, nil, false, nil
 	}
 	ok, err := c._consume()
@@ -1611,16 +1610,20 @@ func (l *FlatDBTrieLoader) collectMissedAccounts(canUse func([]byte) (bool, []by
 		if k == nil {
 			return hasTree, nil
 		}
-		if !hasHash && !hasTree { // nko hash, no tree, but has state
+		if !hasHash && !hasTree { // no hash, no tree, but has state
 			if !cache.HasAccountWithInPrefix(k) {
 				misses = append(misses, common.CopyBytes(k))
 			}
 			return hasTree, nil
 		}
+		if !hasHash {
+			return hasTree, nil
+		}
+
 		if ok, _ := canUse(k); ok {
 			return false, nil
 		}
-		if !hasTree {
+		if !hasTree { // can't use hash, but maybe can use hash of child. Only if no children, then use state
 			if !cache.HasAccountWithInPrefix(k) {
 				misses = append(misses, common.CopyBytes(k))
 			}
@@ -1722,7 +1725,6 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		skipState = skipState && hasTree
 		if doDelete {
-			fmt.Printf("del:%x\n", k[:len(k)-1])
 			// TODO: delete by hash collector and add protection from double-delete
 			cache.SetAccountHashDelete(k[:len(k)-1])
 		}
