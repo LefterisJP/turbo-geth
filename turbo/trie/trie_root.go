@@ -342,16 +342,16 @@ func (r *RootHashAggregator) Receive(itemType StreamItem,
 	cutoff int,
 ) error {
 	//r.traceIf("9c3dc2561d472d125d8f87dde8f2e3758386463ade768ae1a1546d34101968bb", "00")
-	if storageKey == nil {
-		//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
-		fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
-		//}
-	} else {
-		//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
-		//fmt.Printf("%x\n", storageKey)
-		fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
-		//}
-	}
+	//if storageKey == nil {
+	//	//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
+	//	fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
+	//	//}
+	//} else {
+	//	//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
+	//	//fmt.Printf("%x\n", storageKey)
+	//	fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
+	//	//}
+	//}
 
 	switch itemType {
 	case StorageStreamItem:
@@ -758,6 +758,7 @@ func (c *AccTrieCursor) Next() (k, v []byte, hasTree bool, err error) {
 	if c.k[c.lvl] == nil {
 		c.cur = nil
 		c.SkipState = c.SkipState && !dbutils.NextNibblesSubtree(c.prev, &c.next)
+		fmt.Printf("alex: %x,%x\n", c.prev, c.next)
 		return nil, nil, false, nil
 	}
 	ok, err := c._consume()
@@ -967,20 +968,18 @@ type StorageTrieCursor struct {
 	deleted                    [64]bool
 	childID, hashID            [64]int8
 
-	c         ethdb.Cursor
-	shc       StorageHashCollector2
-	prev, cur []byte
-	seek      []byte
-	root      []byte
+	c                ethdb.Cursor
+	shc              StorageHashCollector2
+	prev, cur        []byte
+	seek, next, kBuf []byte
+	root             []byte
 
-	next                  []byte
 	firstNotCoveredPrefix []byte
 	canUse                func([]byte) (bool, []byte)
 	nextCreated           []byte
 	skipState             bool
 
 	accWithInc []byte
-	kBuf       []byte
 	quit       <-chan struct{}
 }
 
@@ -1198,7 +1197,7 @@ func (c *StorageTrieCursor) _nextSiblingOfParentInMem() bool {
 			for ; c.k[nonNilLvl] == nil && nonNilLvl > 0; nonNilLvl-- {
 			}
 			c.seek = append(append(c.seek[:40], c.k[c.lvl]...), uint8(c.childID[c.lvl]))
-			c.next = append(append(c.next[:0], c.k[nonNilLvl]...), uint8(c.childID[nonNilLvl]))
+			c.next = append(append(c.kBuf[:0], c.k[nonNilLvl]...), uint8(c.childID[nonNilLvl]))
 			ok, err := c._seek(c.seek, c.next)
 			if err != nil {
 				panic(err)
@@ -1693,13 +1692,19 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 
 //func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash []byte, incarnation uint64, doDelete bool, cache *shards.StateCache, canUse func(prefix []byte) (bool, []byte), walker func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error, onMiss func(k []byte)) error {
 //	var prev []byte
-//	_, nextCreated := canUse(prefix)
+//	buf := make([]byte, 8)
+//	binary.BigEndian.PutUint64(buf, incarnation)
+//	kBuf := make([]byte, 80)
+//	hexutil.DecompressNibbles(accHash, &kBuf)
+//	incBuffer := kBuf[2*common.HashLength:]
+//	hexutil.DecompressNibbles(buf, &incBuffer)
+//	_, nextCreated := canUse(kBuf)
 //	skipState := true
-//	return cache.StorageTree(logPrefix, accHash, incarnation, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
+//	return cache.StorageTree(logPrefix, common.BytesToHash(accHash), incarnation, func(k []byte, h common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
 //		if k == nil {
 //			endOfWorld := !dbutils.NextNibblesSubtree(prev, &l.accSeek)
-//			l.accSeek = firstNotCoveredPrefix(prev, prefix, l.accSeek)
-//			skipState = skipState && prev != nil && (endOfWorld || !bytes.HasPrefix(l.accSeek, prefix))
+//			l.storageSeek = firstNotCoveredPrefix(prev, []byte{0, 0}, l.storageSeek)
+//			skipState = skipState && prev != nil && (endOfWorld || !bytes.HasPrefix(l.storageSeek, prefix))
 //			return hasTree, walker(k, h, hasTree, skipState, l.accSeek)
 //		}
 //		if !hasTree && !hasHash {
