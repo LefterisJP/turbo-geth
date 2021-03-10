@@ -638,7 +638,7 @@ func accountTrieCollectorForCache(cache *shards.StateCache) trie.HashCollector2 
 			return nil
 		}
 		newV := trie.CastTrieNodeValue(hashes, nil)
-		cache.SetAccountHashWrite(keyHex, hasState, hasTree, hasHash, newV)
+		cache.SetAccountTrieWrite(keyHex, hasState, hasTree, hasHash, newV)
 		return nil
 	}
 }
@@ -651,7 +651,7 @@ func storageTrieCollectorForCache(cache *shards.StateCache) trie.StorageHashColl
 			return nil
 		}
 		newV := trie.CastTrieNodeValue(hashes, rootHash)
-		cache.SetStorageHashWrite(addr, inc, keyHex, hasState, hasTree, hasHash, newV)
+		cache.SetStorageTrieWrite(addr, inc, keyHex, hasState, hasTree, hasHash, newV)
 		return nil
 	}
 }

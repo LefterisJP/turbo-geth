@@ -227,7 +227,7 @@ func (sc *StateCache) SetAccountTrieRead(prefix []byte, hasState, hasTree, hasHa
 	sc.setRead(&ai, false /* absent */)
 }
 
-func (sc *StateCache) SetAccountHashWrite(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+func (sc *StateCache) SetAccountTrieWrite(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	panic(2)
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
@@ -282,7 +282,7 @@ func (sc *StateCache) SetStorageTrieRead(addrHash common.Hash, incarnation uint6
 	sc.setRead(&ai, false /* absent */)
 }
 
-func (sc *StateCache) SetStorageHashWrite(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+func (sc *StateCache) SetStorageTrieWrite(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
 		if !isValid {
@@ -336,12 +336,7 @@ func (sc *StateCache) SetStorageTrieDelete(addrHash common.Hash, incarnation uin
 	sc.setWrite(&ai, &wi, true /* delete */)
 }
 
-func (sc *StateCache) AccountHashCount() int {
-	var key AccountSeek
-	return sc.readWrites[id(key)].Len()
-}
-
-func (sc *StateCache) GetAccountHash(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {
+func (sc *StateCache) GetAccountTrie(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {
 	var key AccountTrieItem
 	key.addrHashPrefix = prefix
 	if item, ok := sc.get(&key); ok {
