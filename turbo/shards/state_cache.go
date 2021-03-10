@@ -378,9 +378,9 @@ func id(a interface{}) uint8 {
 		return 1
 	case *CodeItem, *CodeWriteItem:
 		return 2
-	case *AccountHashItem, *AccountHashWriteItem:
+	case *AccountTrieItem, *AccountTrieWriteItem:
 		return 3
-	case *StorageHashItem, *StorageHashWriteItem:
+	case *StorageTrieItem, *StorageTrieWriteItem:
 		return 4
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", a))
@@ -463,8 +463,10 @@ func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 	hexutil.CompressNibbles(hexPrefix, &hexPrefix)
 	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
+	fmt.Printf("has: %x,%d,%x\n", hexPrefix, fixedbytes, mask)
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		found = hasPrefix(i.(*AccountItem).addrHash.Bytes(), seek.seek, seek.fixedBytes, seek.mask)
+		fmt.Printf("found: %x-%x,%d,%x->%t\n", i.(*AccountItem).addrHash.Bytes(), hexPrefix, fixedbytes, mask, found)
 		return false
 	})
 	return found

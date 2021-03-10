@@ -17,13 +17,13 @@ import (
 // Sizes of B-tree items for the purposes of keeping track of the size of reads and writes
 // The sizes of the nodes of the B-tree are not accounted for, because their are private to the `btree` package
 const (
-	accountHashItemSize      = int(unsafe.Sizeof(AccountHashItem{}) + 16)
-	accountHashWriteItemSize = int(unsafe.Sizeof(AccountHashWriteItem{}) + 16)
-	storageHashItemSize      = int(unsafe.Sizeof(StorageHashItem{}) + 16)
-	storageHashWriteItemSize = int(unsafe.Sizeof(StorageHashWriteItem{}) + 16)
+	accountHashItemSize      = int(unsafe.Sizeof(AccountTrieItem{}) + 16)
+	accountHashWriteItemSize = int(unsafe.Sizeof(AccountTrieWriteItem{}) + 16)
+	storageHashItemSize      = int(unsafe.Sizeof(StorageTrieItem{}) + 16)
+	storageHashWriteItemSize = int(unsafe.Sizeof(StorageTrieWriteItem{}) + 16)
 )
 
-type AccountHashItem struct {
+type AccountTrieItem struct {
 	sequence                   int
 	queuePos                   int
 	flags                      uint16
@@ -32,44 +32,44 @@ type AccountHashItem struct {
 	addrHashPrefix             []byte
 }
 
-type AccountHashWriteItem struct {
-	ai *AccountHashItem
+type AccountTrieWriteItem struct {
+	ai *AccountTrieItem
 }
 
-func (awi *AccountHashWriteItem) GetCacheItem() CacheItem     { return awi.ai }
-func (awi *AccountHashWriteItem) SetCacheItem(item CacheItem) { awi.ai = item.(*AccountHashItem) }
-func (awi *AccountHashWriteItem) GetSize() int                { return accountHashWriteItemSize }
-func (awi *AccountHashWriteItem) Less(than btree.Item) bool {
+func (awi *AccountTrieWriteItem) GetCacheItem() CacheItem     { return awi.ai }
+func (awi *AccountTrieWriteItem) SetCacheItem(item CacheItem) { awi.ai = item.(*AccountTrieItem) }
+func (awi *AccountTrieWriteItem) GetSize() int                { return accountHashWriteItemSize }
+func (awi *AccountTrieWriteItem) Less(than btree.Item) bool {
 	return awi.ai.Less(than)
 }
 
-func (ahi *AccountHashItem) Less(than btree.Item) bool {
+func (ahi *AccountTrieItem) Less(than btree.Item) bool {
 	switch i := than.(type) {
-	case *AccountHashItem:
+	case *AccountTrieItem:
 		return bytes.Compare(ahi.addrHashPrefix, i.addrHashPrefix) < 0
-	case *AccountHashWriteItem:
+	case *AccountTrieWriteItem:
 		return bytes.Compare(ahi.addrHashPrefix, i.ai.addrHashPrefix) < 0
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", than))
 	}
 }
 
-func (ahi *AccountHashItem) GetSequence() int         { return ahi.sequence }
-func (ahi *AccountHashItem) SetSequence(sequence int) { ahi.sequence = sequence }
-func (ahi *AccountHashItem) GetSize() int             { return accountHashItemSize + len(ahi.addrHashPrefix) }
-func (ahi *AccountHashItem) GetQueuePos() int         { return ahi.queuePos }
-func (ahi *AccountHashItem) SetQueuePos(pos int)      { ahi.queuePos = pos }
-func (ahi *AccountHashItem) HasFlag(flag uint16) bool { return ahi.flags&flag != 0 }
-func (ahi *AccountHashItem) SetFlags(flags uint16)    { ahi.flags |= flags }
-func (ahi *AccountHashItem) ClearFlags(flags uint16)  { ahi.flags &^= flags }
-func (ahi *AccountHashItem) String() string {
-	return fmt.Sprintf("AccountHashItem(addrHashPrefix=%x)", ahi.addrHashPrefix)
+func (ahi *AccountTrieItem) GetSequence() int         { return ahi.sequence }
+func (ahi *AccountTrieItem) SetSequence(sequence int) { ahi.sequence = sequence }
+func (ahi *AccountTrieItem) GetSize() int             { return accountHashItemSize + len(ahi.addrHashPrefix) }
+func (ahi *AccountTrieItem) GetQueuePos() int         { return ahi.queuePos }
+func (ahi *AccountTrieItem) SetQueuePos(pos int)      { ahi.queuePos = pos }
+func (ahi *AccountTrieItem) HasFlag(flag uint16) bool { return ahi.flags&flag != 0 }
+func (ahi *AccountTrieItem) SetFlags(flags uint16)    { ahi.flags |= flags }
+func (ahi *AccountTrieItem) ClearFlags(flags uint16)  { ahi.flags &^= flags }
+func (ahi *AccountTrieItem) String() string {
+	return fmt.Sprintf("AccountTrieItem(addrHashPrefix=%x)", ahi.addrHashPrefix)
 }
 
-func (ahi *AccountHashItem) CopyValueFrom(item CacheItem) {
-	other, ok := item.(*AccountHashItem)
+func (ahi *AccountTrieItem) CopyValueFrom(item CacheItem) {
+	other, ok := item.(*AccountTrieItem)
 	if !ok {
-		panic(fmt.Sprintf("expected AccountHashItem, got %T", item))
+		panic(fmt.Sprintf("expected AccountTrieItem, got %T", item))
 	}
 	ahi.hashes = make([]common.Hash, len(other.hashes))
 	for i := 0; i < len(ahi.hashes); i++ {
@@ -80,10 +80,10 @@ func (ahi *AccountHashItem) CopyValueFrom(item CacheItem) {
 	ahi.hasHash = other.hasHash
 }
 
-type StorageHashWriteItem struct {
-	i *StorageHashItem
+type StorageTrieWriteItem struct {
+	i *StorageTrieItem
 }
-type StorageHashItem struct {
+type StorageTrieItem struct {
 	flags, hasState, hasTree, hasHash uint16
 	sequence, queuePos                int
 	addrHash                          common.Hash
@@ -92,15 +92,15 @@ type StorageHashItem struct {
 	hashes                            []common.Hash
 }
 
-func (wi *StorageHashWriteItem) GetCacheItem() CacheItem     { return wi.i }
-func (wi *StorageHashWriteItem) SetCacheItem(item CacheItem) { wi.i = item.(*StorageHashItem) }
-func (wi *StorageHashWriteItem) GetSize() int                { return storageHashWriteItemSize }
-func (wi *StorageHashWriteItem) Less(than btree.Item) bool {
-	return wi.i.Less(than.(*StorageHashWriteItem).i)
+func (wi *StorageTrieWriteItem) GetCacheItem() CacheItem     { return wi.i }
+func (wi *StorageTrieWriteItem) SetCacheItem(item CacheItem) { wi.i = item.(*StorageTrieItem) }
+func (wi *StorageTrieWriteItem) GetSize() int                { return storageHashWriteItemSize }
+func (wi *StorageTrieWriteItem) Less(than btree.Item) bool {
+	return wi.i.Less(than.(*StorageTrieWriteItem).i)
 }
 
-func (shi *StorageHashItem) Less(than btree.Item) bool {
-	i := than.(*StorageHashItem)
+func (shi *StorageTrieItem) Less(than btree.Item) bool {
+	i := than.(*StorageTrieItem)
 	c := bytes.Compare(shi.addrHash.Bytes(), i.addrHash.Bytes())
 	if c != 0 {
 		return c < 0
@@ -111,22 +111,22 @@ func (shi *StorageHashItem) Less(than btree.Item) bool {
 	return bytes.Compare(shi.locHashPrefix, i.locHashPrefix) < 0
 }
 
-func (shi *StorageHashItem) GetSequence() int         { return shi.sequence }
-func (shi *StorageHashItem) SetSequence(sequence int) { shi.sequence = sequence }
-func (shi *StorageHashItem) GetSize() int             { return storageHashItemSize + len(shi.locHashPrefix) }
-func (shi *StorageHashItem) GetQueuePos() int         { return shi.queuePos }
-func (shi *StorageHashItem) SetQueuePos(pos int)      { shi.queuePos = pos }
-func (shi *StorageHashItem) HasFlag(flag uint16) bool { return shi.flags&flag != 0 }
-func (shi *StorageHashItem) SetFlags(flags uint16)    { shi.flags |= flags }
-func (shi *StorageHashItem) ClearFlags(flags uint16)  { shi.flags &^= flags }
-func (shi *StorageHashItem) String() string {
-	return fmt.Sprintf("StorageHashItem(addrHash=%x,incarnation=%d,locHashPrefix=%x)", shi.addrHash, shi.incarnation, shi.locHashPrefix)
+func (shi *StorageTrieItem) GetSequence() int         { return shi.sequence }
+func (shi *StorageTrieItem) SetSequence(sequence int) { shi.sequence = sequence }
+func (shi *StorageTrieItem) GetSize() int             { return storageHashItemSize + len(shi.locHashPrefix) }
+func (shi *StorageTrieItem) GetQueuePos() int         { return shi.queuePos }
+func (shi *StorageTrieItem) SetQueuePos(pos int)      { shi.queuePos = pos }
+func (shi *StorageTrieItem) HasFlag(flag uint16) bool { return shi.flags&flag != 0 }
+func (shi *StorageTrieItem) SetFlags(flags uint16)    { shi.flags |= flags }
+func (shi *StorageTrieItem) ClearFlags(flags uint16)  { shi.flags &^= flags }
+func (shi *StorageTrieItem) String() string {
+	return fmt.Sprintf("StorageTrieItem(addrHash=%x,incarnation=%d,locHashPrefix=%x)", shi.addrHash, shi.incarnation, shi.locHashPrefix)
 }
 
-func (shi *StorageHashItem) CopyValueFrom(item CacheItem) {
-	other, ok := item.(*StorageHashItem)
+func (shi *StorageTrieItem) CopyValueFrom(item CacheItem) {
+	other, ok := item.(*StorageTrieItem)
 	if !ok {
-		panic(fmt.Sprintf("expected StorageHashItem, got %T", item))
+		panic(fmt.Sprintf("expected StorageTrieItem, got %T", item))
 	}
 	shi.hashes = make([]common.Hash, len(other.hashes))
 	for i := 0; i < len(shi.hashes); i++ {
@@ -184,18 +184,18 @@ func (ci *CodeItem) HasPrefix(prefix CacheItem) bool {
 	}
 }
 
-func (ahi *AccountHashItem) HasPrefix(prefix CacheItem) bool {
+func (ahi *AccountTrieItem) HasPrefix(prefix CacheItem) bool {
 	switch i := prefix.(type) {
-	case *AccountHashItem:
+	case *AccountTrieItem:
 		return bytes.HasPrefix(ahi.addrHashPrefix, i.addrHashPrefix)
 	default:
 		panic(fmt.Sprintf("unrecognised type of cache item: %T", prefix))
 	}
 }
 
-func (shi *StorageHashItem) HasPrefix(prefix CacheItem) bool {
+func (shi *StorageTrieItem) HasPrefix(prefix CacheItem) bool {
 	switch i := prefix.(type) {
-	case *StorageHashItem:
+	case *StorageTrieItem:
 		if shi.addrHash != i.addrHash || shi.incarnation != i.incarnation {
 			return false
 		}
@@ -205,7 +205,9 @@ func (shi *StorageHashItem) HasPrefix(prefix CacheItem) bool {
 	}
 }
 
-func (sc *StateCache) SetAccountHashesRead(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+func (sc *StateCache) SetAccountTrieRead(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+	panic(2)
+
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d, at %x", bits.OnesCount16(hasHash), len(hashes), prefix))
 	}
@@ -215,7 +217,7 @@ func (sc *StateCache) SetAccountHashesRead(prefix []byte, hasState, hasTree, has
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
 	}
-	ai := AccountHashItem{
+	ai := AccountTrieItem{
 		addrHashPrefix: common.CopyBytes(prefix),
 		hasState:       hasState,
 		hasTree:        hasTree,
@@ -226,12 +228,13 @@ func (sc *StateCache) SetAccountHashesRead(prefix []byte, hasState, hasTree, has
 }
 
 func (sc *StateCache) SetAccountHashWrite(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+	panic(2)
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
 	}
 	assertSubset(hasTree, hasState)
 	assertSubset(hasHash, hasState)
-	ai := AccountHashItem{
+	ai := AccountTrieItem{
 		addrHashPrefix: common.CopyBytes(prefix),
 		hasState:       hasState,
 		hasTree:        hasTree,
@@ -241,20 +244,20 @@ func (sc *StateCache) SetAccountHashWrite(prefix []byte, hasState, hasTree, hasH
 	for i := 0; i < len(hashes); i++ {
 		ai.hashes[i] = hashes[i]
 	}
-	var awi AccountHashWriteItem
+	var awi AccountTrieWriteItem
 	awi.ai = &ai
 	sc.setWrite(&ai, &awi, false /* delete */)
 }
 
 func (sc *StateCache) SetAccountHashDelete(prefix []byte) {
-	var ai AccountHashItem
-	var wi AccountHashWriteItem
+	var ai AccountTrieItem
+	var wi AccountTrieWriteItem
 	ai.addrHashPrefix = append(ai.addrHashPrefix[:0], prefix...)
 	wi.ai = &ai
 	sc.setWrite(&ai, &wi, true /* delete */)
 }
 
-func (sc *StateCache) SetStorageHashRead(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+func (sc *StateCache) SetStorageTrieRead(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
 		if !isValid {
@@ -267,7 +270,7 @@ func (sc *StateCache) SetStorageHashRead(addrHash common.Hash, incarnation uint6
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
 	}
-	ai := StorageHashItem{
+	ai := StorageTrieItem{
 		addrHash:      addrHash,
 		incarnation:   incarnation,
 		locHashPrefix: common.CopyBytes(locHashPrefix),
@@ -292,7 +295,7 @@ func (sc *StateCache) SetStorageHashWrite(addrHash common.Hash, incarnation uint
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
 	}
-	ai := StorageHashItem{
+	ai := StorageTrieItem{
 		addrHash:      addrHash,
 		incarnation:   incarnation,
 		locHashPrefix: common.CopyBytes(locHashPrefix),
@@ -301,12 +304,12 @@ func (sc *StateCache) SetStorageHashWrite(addrHash common.Hash, incarnation uint
 		hasHash:       hasHash,
 		hashes:        cpy,
 	}
-	var wi StorageHashWriteItem
+	var wi StorageTrieWriteItem
 	wi.i = &ai
 	sc.setWrite(&ai, &wi, false /* delete */)
 }
 
-func (sc *StateCache) SetStorageHashDelete(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
+func (sc *StateCache) SetStorageTrieDelete(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		isValid := len(locHashPrefix) == 0 && bits.OnesCount16(hasHash)+1 != len(hashes)
 		if !isValid {
@@ -319,7 +322,7 @@ func (sc *StateCache) SetStorageHashDelete(addrHash common.Hash, incarnation uin
 	for i := 0; i < len(hashes); i++ {
 		cpy[i] = hashes[i]
 	}
-	ai := StorageHashItem{
+	ai := StorageTrieItem{
 		addrHash:      addrHash,
 		incarnation:   incarnation,
 		locHashPrefix: common.CopyBytes(locHashPrefix),
@@ -328,7 +331,7 @@ func (sc *StateCache) SetStorageHashDelete(addrHash common.Hash, incarnation uin
 		hasHash:       hasHash,
 		hashes:        cpy,
 	}
-	var wi StorageHashWriteItem
+	var wi StorageTrieWriteItem
 	wi.i = &ai
 	sc.setWrite(&ai, &wi, true /* delete */)
 }
@@ -339,11 +342,11 @@ func (sc *StateCache) AccountHashCount() int {
 }
 
 func (sc *StateCache) GetAccountHash(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {
-	var key AccountHashItem
+	var key AccountTrieItem
 	key.addrHashPrefix = prefix
 	if item, ok := sc.get(&key); ok {
 		if item != nil {
-			i := item.(*AccountHashItem)
+			i := item.(*AccountTrieItem)
 			return i.addrHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, true
 		}
 		return nil, 0, 0, 0, nil, true
@@ -352,10 +355,10 @@ func (sc *StateCache) GetAccountHash(prefix []byte) ([]byte, uint16, uint16, uin
 }
 
 func (sc *StateCache) GetStorageHash(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {
-	key := StorageHashItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix}
+	key := StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix}
 	if item, ok := sc.get(&key); ok {
 		if item != nil {
-			i := item.(*StorageHashItem)
+			i := item.(*StorageTrieItem)
 			return i.locHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, true
 		}
 		return nil, 0, 0, 0, nil, true
@@ -364,11 +367,11 @@ func (sc *StateCache) GetStorageHash(addrHash common.Hash, incarnation uint64, p
 }
 
 func (sc *StateCache) DebugPrintAccounts() error {
-	var cur *AccountHashItem
+	var cur *AccountTrieItem
 	id := id(cur)
 	rw := sc.writes[id]
 	rw.Ascend(func(i btree.Item) bool {
-		it := i.(*AccountHashWriteItem)
+		it := i.(*AccountTrieWriteItem)
 		if it.ai.HasFlag(AbsentFlag) || it.ai.HasFlag(DeletedFlag) {
 			fmt.Printf("deleted: %x\n", it.ai.addrHashPrefix)
 		} else if it.ai.HasFlag(ModifiedFlag) {
@@ -633,12 +636,12 @@ func (sc *StateCache) StorageTree(logPrefix string, accHash common.Hash, incarna
 }
 
 func (sc *StateCache) AccountHashesSeek(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
-	var cur *AccountHashItem
-	seek := &AccountHashItem{}
+	var cur *AccountTrieItem
+	seek := &AccountTrieItem{}
 	id := id(seek)
 	seek.addrHashPrefix = append(seek.addrHashPrefix[:0], prefix...)
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		it := i.(*AccountHashItem)
+		it := i.(*AccountTrieItem)
 		if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 			return true
 		}
@@ -657,14 +660,14 @@ func (sc *StateCache) HasAccountTrieWithPrefix(prefix []byte) bool {
 }
 
 func (sc *StateCache) StorageTrieSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
-	var cur *StorageHashItem
-	seek := &StorageHashItem{}
+	var cur *StorageTrieItem
+	seek := &StorageTrieItem{}
 	id := id(seek)
 	seek.addrHash.SetBytes(addrHash.Bytes())
 	seek.incarnation = incarnation
 	seek.locHashPrefix = prefix
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		it := i.(*StorageHashItem)
+		it := i.(*StorageTrieItem)
 		if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 			return true
 		}
@@ -684,9 +687,9 @@ func (sc *StateCache) StorageTrieSeek(addrHash common.Hash, incarnation uint64, 
 }
 
 func WalkAccountHashesWrites(writes [5]*btree.BTree, update func(prefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash), del func(prefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash)) {
-	id := id(&AccountHashWriteItem{})
+	id := id(&AccountTrieWriteItem{})
 	writes[id].Ascend(func(i btree.Item) bool {
-		it := i.(*AccountHashWriteItem)
+		it := i.(*AccountTrieWriteItem)
 		if it.ai.HasFlag(AbsentFlag) || it.ai.HasFlag(DeletedFlag) {
 			del(it.ai.addrHashPrefix, it.ai.hasState, it.ai.hasTree, it.ai.hasHash, it.ai.hashes)
 			return true
@@ -697,9 +700,9 @@ func WalkAccountHashesWrites(writes [5]*btree.BTree, update func(prefix []byte, 
 }
 
 func (sc *StateCache) WalkStorageHashes(walker func(addrHash common.Hash, incarnation uint64, prefix []byte, hasStat, hasTree, hasHash uint16, h []common.Hash) error) error {
-	id := id(&StorageHashItem{})
+	id := id(&StorageTrieItem{})
 	sc.readWrites[id].Ascend(func(i btree.Item) bool {
-		it, ok := i.(*StorageHashItem)
+		it, ok := i.(*StorageTrieItem)
 		if !ok {
 			return true
 		}
@@ -717,7 +720,7 @@ func (sc *StateCache) WalkStorageHashes(walker func(addrHash common.Hash, incarn
 func WalkStorageHashesWrites(writes [5]*btree.BTree, update func(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash), del func(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasStat, hasTree, hasHash uint16, h []common.Hash)) {
 	id := id(&StorageWriteItem{})
 	writes[id].Ascend(func(i btree.Item) bool {
-		it := i.(*StorageHashWriteItem)
+		it := i.(*StorageTrieWriteItem)
 		if it.i.HasFlag(AbsentFlag) || it.i.HasFlag(DeletedFlag) {
 			del(it.i.addrHash, it.i.incarnation, it.i.locHashPrefix, it.i.hasState, it.i.hasTree, it.i.hasHash, it.i.hashes)
 			return true

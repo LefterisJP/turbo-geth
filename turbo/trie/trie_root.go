@@ -1477,7 +1477,7 @@ func loadAccTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cache *
 				break
 			}
 			hasState, hasTree, hasHash, newV := UnmarshalTrieNodeTyped(v)
-			cache.SetAccountHashesRead(k, hasState, hasTree, hasHash, newV)
+			cache.SetAccountTrieRead(k, hasState, hasTree, hasHash, newV)
 		}
 	}
 	return nil
@@ -1496,7 +1496,7 @@ func loadStorageTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cac
 				break
 			}
 			hasState, hasTree, hasHash, hashes := UnmarshalTrieNodeTyped(v)
-			cache.SetStorageHashRead(common.BytesToHash(k[:32]), binary.BigEndian.Uint64(k[32:]), k[40:], hasState, hasTree, hasHash, hashes)
+			cache.SetStorageTrieRead(common.BytesToHash(k[:32]), binary.BigEndian.Uint64(k[32:]), k[40:], hasState, hasTree, hasHash, hashes)
 		}
 	}
 	return nil
@@ -1573,20 +1573,20 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 		quit); err != nil {
 		return err
 	}
-	fmt.Printf("11: accTrieMiss:%x,stTrieMiss:%x\n", accTrieMiss, stTrieMiss)
 	if err := loadAccTrieToCache(trieAcc, prefix, accTrieMiss, cache, quit); err != nil {
 		return err
 	}
-	if !cache.HasAccountTrieWithPrefix(prefix) {
+	if !cache.HasAccountWithHexPrefix(prefix) {
 		accMiss = append(accMiss, prefix)
-	}
-	if err := l.post(ss, prefix, cache, false,
-		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
-		func(k []byte) { accMiss = append(accMiss, common.CopyBytes(k)) },
-		func(k []byte) {},
-		func(k []byte) {},
-		quit); err != nil {
-		return err
+	} else {
+		if err := l.post(ss, prefix, cache, false,
+			func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
+			func(k []byte) { accMiss = append(accMiss, common.CopyBytes(k)) },
+			func(k []byte) {},
+			func(k []byte) {},
+			quit); err != nil {
+			return err
+		}
 	}
 	fmt.Printf("accMiss:%x\n", accMiss)
 	if err := loadAccsToCache(accs, accMiss, cache, quit); err != nil {
@@ -1594,7 +1594,6 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	}
 
 	// storage
-	accTrieMiss, accMiss, stTrieMiss, stMiss = accTrieMiss[:0], accMiss[:0], stTrieMiss[:0], stMiss[:0]
 	if err := l.post(ss, prefix, cache, false,
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
