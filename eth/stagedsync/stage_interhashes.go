@@ -634,7 +634,7 @@ func accountTrieCollectorForCache(cache *shards.StateCache) trie.HashCollector2 
 			return nil
 		}
 		if hasState == 0 {
-			cache.SetAccountHashDelete(keyHex)
+			cache.SetAccountTrieDelete(keyHex)
 			return nil
 		}
 		newV := trie.CastTrieNodeValue(hashes, nil)

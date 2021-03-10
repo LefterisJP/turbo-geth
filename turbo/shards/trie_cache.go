@@ -206,8 +206,6 @@ func (shi *StorageTrieItem) HasPrefix(prefix CacheItem) bool {
 }
 
 func (sc *StateCache) SetAccountTrieRead(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
-	panic(2)
-
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d, at %x", bits.OnesCount16(hasHash), len(hashes), prefix))
 	}
@@ -228,7 +226,6 @@ func (sc *StateCache) SetAccountTrieRead(prefix []byte, hasState, hasTree, hasHa
 }
 
 func (sc *StateCache) SetAccountTrieWrite(prefix []byte, hasState, hasTree, hasHash uint16, hashes []common.Hash) {
-	panic(2)
 	if bits.OnesCount16(hasHash) != len(hashes) {
 		panic(fmt.Errorf("invariant bits.OnesCount16(hasHash) == len(hashes) failed: %d, %d", bits.OnesCount16(hasHash), len(hashes)))
 	}
@@ -249,10 +246,9 @@ func (sc *StateCache) SetAccountTrieWrite(prefix []byte, hasState, hasTree, hasH
 	sc.setWrite(&ai, &awi, false /* delete */)
 }
 
-func (sc *StateCache) SetAccountHashDelete(prefix []byte) {
-	var ai AccountTrieItem
+func (sc *StateCache) SetAccountTrieDelete(prefix []byte) {
+	ai := AccountTrieItem{addrHashPrefix: common.CopyBytes(prefix)}
 	var wi AccountTrieWriteItem
-	ai.addrHashPrefix = append(ai.addrHashPrefix[:0], prefix...)
 	wi.ai = &ai
 	sc.setWrite(&ai, &wi, true /* delete */)
 }

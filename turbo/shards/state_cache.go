@@ -463,10 +463,8 @@ func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 	hexutil.CompressNibbles(hexPrefix, &hexPrefix)
 	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
-	fmt.Printf("has: %x,%d,%x\n", hexPrefix, fixedbytes, mask)
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		found = hasPrefix(i.(*AccountItem).addrHash.Bytes(), seek.seek, seek.fixedBytes, seek.mask)
-		fmt.Printf("found: %x-%x,%d,%x->%t\n", i.(*AccountItem).addrHash.Bytes(), hexPrefix, fixedbytes, mask, found)
 		return false
 	})
 	return found
@@ -490,6 +488,8 @@ func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation 
 
 // GetDeletedAccount attempts to retrieve the last version of account before it was deleted
 func (sc *StateCache) GetDeletedAccount(address []byte) *accounts.Account {
+	panic(1)
+
 	key := &AccountItem{}
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)

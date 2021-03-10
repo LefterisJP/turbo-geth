@@ -1477,6 +1477,7 @@ func loadAccTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cache *
 				break
 			}
 			hasState, hasTree, hasHash, newV := UnmarshalTrieNodeTyped(v)
+			fmt.Printf("load: %x\n", k)
 			cache.SetAccountTrieRead(k, hasState, hasTree, hasHash, newV)
 		}
 	}
@@ -1663,7 +1664,7 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		if doDelete {
 			// TODO: delete by hash collector and add protection from double-delete
-			cache.SetAccountHashDelete(k[:len(k)-1])
+			cache.SetAccountTrieDelete(k[:len(k)-1])
 		}
 		return hasTree, nil
 	}, onMiss)
@@ -1725,7 +1726,7 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 		}
 		if doDelete {
 			// TODO: delete by hash collector and add protection from double-delete
-			cache.SetAccountHashDelete(k[:len(k)-1])
+			cache.SetAccountTrieDelete(k[:len(k)-1])
 		}
 		return hasTree, nil
 	}, onMiss)
