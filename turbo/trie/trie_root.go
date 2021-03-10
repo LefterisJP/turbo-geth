@@ -1477,7 +1477,6 @@ func loadAccTrieToCache(ih ethdb.Cursor, prefix []byte, misses [][]byte, cache *
 				break
 			}
 			hasState, hasTree, hasHash, newV := UnmarshalTrieNodeTyped(v)
-			fmt.Printf("load: %x\n", k)
 			cache.SetAccountTrieRead(k, hasState, hasTree, hasHash, newV)
 		}
 	}
@@ -1564,9 +1563,10 @@ func loadStorageToCache(ss ethdb.Cursor, misses [][]byte, cache *shards.StateCac
 func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSort, prefix []byte, cache *shards.StateCache, quit <-chan struct{}) error {
 	defer func(t time.Time) { fmt.Printf("trie_root.go:338: %s\n", time.Since(t)) }(time.Now())
 	receiver := l.receiver
+	defer func() { l.receiver = receiver }()
 	l.receiver = NewNoopReceiver()
 	var accTrieMiss, accMiss, stTrieMiss, stMiss [][]byte
-	if err := l.post(ss, prefix, cache, false,
+	if err := l.post("prep1", ss, prefix, cache, false,
 		func(k []byte) { accTrieMiss = append(accTrieMiss, common.CopyBytes(k)) },
 		func(k []byte) {},
 		func(k []byte) {},
@@ -1580,7 +1580,7 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	if !cache.HasAccountWithHexPrefix(prefix) {
 		accMiss = append(accMiss, prefix)
 	} else {
-		if err := l.post(ss, prefix, cache, false,
+		if err := l.post("prep2", ss, prefix, cache, false,
 			func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 			func(k []byte) { accMiss = append(accMiss, common.CopyBytes(k)) },
 			func(k []byte) {},
@@ -1595,7 +1595,7 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	}
 
 	// storage
-	if err := l.post(ss, prefix, cache, false,
+	if err := l.post("prep3", ss, prefix, cache, false,
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 		func(k []byte) { stTrieMiss = append(stTrieMiss, common.CopyBytes(k)) },
@@ -1606,7 +1606,7 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	if err := loadStorageTrieToCache(trieAcc, prefix, stTrieMiss, cache, quit); err != nil {
 		return err
 	}
-	if err := l.post(ss, prefix, cache, false,
+	if err := l.post("prep4", ss, prefix, cache, false,
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
@@ -1617,7 +1617,6 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	if err := loadStorageToCache(ss, stMiss, cache, quit); err != nil {
 		return err
 	}
-	l.receiver = receiver
 	return nil
 }
 
@@ -1634,6 +1633,9 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		if !hasTree && !hasHash {
 			skipState = false
+			if logPrefix == "prep3" {
+				fmt.Printf("b: %x,%t\n", k, cache.HasAccountWithHexPrefix(k))
+			}
 			if !cache.HasAccountWithHexPrefix(k) {
 				onAccountMiss(k)
 			}
@@ -1659,6 +1661,9 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		if !hasTree {
 			skipState = false
 			if !cache.HasAccountWithHexPrefix(k) {
+				if logPrefix == "prep3" {
+					fmt.Printf("b: %x,%t\n", k, cache.HasAccountWithHexPrefix(k))
+				}
 				onAccountMiss(k)
 			}
 		}
@@ -1732,7 +1737,7 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 	}, onMiss)
 }
 
-func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, prefix []byte, cache *shards.StateCache, doDelete bool, onAccTrieMiss, onAccMiss, onStTrieMiss, onStMiss shards.OnMiss, quit <-chan struct{}) error {
+func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, prefix []byte, cache *shards.StateCache, doDelete bool, onAccTrieMiss, onAccMiss, onStTrieMiss, onStMiss shards.OnMiss, quit <-chan struct{}) error {
 	l.accSeek = make([]byte, 0, 64)
 	logEvery := time.NewTicker(30 * time.Second)
 	defer logEvery.Stop()
@@ -1742,7 +1747,7 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, prefix []byte, cac
 		return !retain, nextCreated
 	}
 
-	if err := l.walkAccountTree("post", prefix, doDelete, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
+	if err := l.walkAccountTree(logPrefix, prefix, doDelete, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
 		if skipState {
 			goto SkipAccounts
 		}
@@ -1756,6 +1761,9 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, prefix []byte, cac
 				return false, nil
 			}
 			l.accountValue.Copy(acc)
+			if logPrefix == "post" {
+				fmt.Printf("a: %x\n", l.kHex)
+			}
 			if err := l.receiver.Receive(AccountStreamItem, l.kHex, nil, &l.accountValue, nil, nil, false, 0); err != nil {
 				return false, err
 			}
@@ -1765,7 +1773,7 @@ func (l *FlatDBTrieLoader) post(storages ethdb.CursorDupSort, prefix []byte, cac
 			copy(l.accAddrHashWithInc[:], addrHash.Bytes())
 			binary.BigEndian.PutUint64(l.accAddrHashWithInc[32:], l.accountValue.Incarnation)
 			accWithInc := l.accAddrHashWithInc[:]
-			if err := l.walkStorageTree("post", addrHash, l.accountValue.Incarnation, doDelete, cache, canUse, func(ihKS []byte, ihVS common.Hash, hasTreeS, skipState bool, accSeek []byte) error {
+			if err := l.walkStorageTree(logPrefix, addrHash, l.accountValue.Incarnation, doDelete, cache, canUse, func(ihKS []byte, ihVS common.Hash, hasTreeS, skipState bool, accSeek []byte) error {
 				if skipState {
 					goto SkipStorage
 				}
@@ -1862,7 +1870,7 @@ func (l *FlatDBTrieLoader) CalcSubTrieRootOnCache(tx ethdb.Tx, prefix []byte, ca
 	var panicOnMiss = func(k []byte) {
 		panic(fmt.Errorf("key %x not found in cache", k))
 	}
-	if err := l.post(ss, prefix, cache, true, panicOnMiss, panicOnMiss, panicOnMiss, panicOnMiss, quit); err != nil {
+	if err := l.post("post", ss, prefix, cache, true, panicOnMiss, panicOnMiss, panicOnMiss, panicOnMiss, quit); err != nil {
 		return EmptyRoot, err
 	}
 	//fmt.Printf("%d,%d,%d,%d\n", i1, i2, i3, i4)
