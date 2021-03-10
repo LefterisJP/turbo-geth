@@ -28,16 +28,13 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ledgerwatch/turbo-geth/turbo/shards"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/debug"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/crypto"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/rlp"
+	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -730,87 +727,4 @@ func TestNextSubtreeHex(t *testing.T) {
 		res := isDenseSequence(common.FromHex(tc.prev), common.FromHex(tc.next))
 		assert.Equal(tc.expect, res, "%s, %s", tc.prev, tc.next)
 	}
-}
-
-//func TestIHCursorCanUseNextParent(t *testing.T) {
-//	db, assert := ethdb.NewMemDatabase(), require.New(t)
-//	defer db.Close()
-//	hash := fmt.Sprintf("%064d", 0)
-//
-//	ih := AccTrie(nil, nil, nil, nil)
-//
-//	ih.k[1], ih.v[1], ih.hasTree[1] = common.FromHex("00"), common.FromHex(hash+hash), 0b0000000000000110
-//	ih.k[2], ih.v[2], ih.hasTree[2] = common.FromHex("0001"), common.FromHex(hash), 0b1000000000000000
-//	ih.lvl = 2
-//	ih.hashID[2] = 1
-//	ih.hashID[1] = 0
-//	assert.True(ih._nextSiblingOfParentInMem())
-//	assert.Equal(ih.k[ih.lvl], common.FromHex("00"))
-//
-//	ih.k[1], ih.v[1], ih.hasTree[1] = common.FromHex("00"), common.FromHex(hash+hash), 0b0000000000000110
-//	ih.k[3], ih.v[3], ih.hasTree[3] = common.FromHex("000101"), common.FromHex(hash), 0b1000000000000000
-//	ih.lvl = 3
-//	ih.hashID[3] = 1
-//	ih.hashID[1] = 0
-//	assert.True(ih._nextSiblingOfParentInMem())
-//	assert.Equal(ih.k[ih.lvl], common.FromHex("00"))
-//
-//}
-//
-//func _TestEmptyRoot(t *testing.T) {
-//	sc := shards.NewStateCache(32, 64*1024)
-//
-//	sc.SetAccountHashesRead(common.FromHex("00"), 0b111, 0b111, 0b111, []common.Hash{{}, {}, {}})
-//	sc.SetAccountHashesRead(common.FromHex("01"), 0b111, 0b111, 0b111, []common.Hash{{}, {}, {}})
-//	sc.SetAccountHashesRead(common.FromHex("02"), 0b111, 0b111, 0b111, []common.Hash{{}, {}, {}})
-//
-//	rl := NewRetainList(0)
-//	rl.AddHex(common.FromHex("01"))
-//	rl.AddHex(common.FromHex("0101"))
-//	canUse := func(prefix []byte) bool { return !rl.Retain(prefix) }
-//	i := 0
-//	if err := sc.AccountTree([]byte{}, func(ihK []byte, h common.Hash, hasTree, skipState bool) (toChild bool, err error) {
-//		i++
-//		switch i {
-//		case 1:
-//			assert.Equal(t, common.FromHex("0001"), ihK)
-//		case 2:
-//			assert.Equal(t, common.FromHex("0100"), ihK)
-//		case 3:
-//			assert.Equal(t, common.FromHex("0102"), ihK)
-//		case 4:
-//			assert.Equal(t, common.FromHex("0202"), ihK)
-//		}
-//		if ok := canUse(ihK); ok {
-//			return false, nil
-//		}
-//		return hasTree, nil
-//	}, func(cur []byte) {
-//		panic(fmt.Errorf("key %x not found in cache", cur))
-//	}); err != nil {
-//		t.Fatal(err)
-//	}
-//}
-
-func TestCollectRanges(t *testing.T) {
-	sc := shards.NewStateCache(32, 64*1024)
-	sc.SetAccountHashesRead(common.FromHex("00"), 0b11, 0b11, 0b11, []common.Hash{{}, {}})
-	sc.SetAccountHashesRead(common.FromHex("02"), 0b10011, 0b10011, 0b10011, []common.Hash{{}, {}, {}})
-	sc.SetAccountHashesRead(common.FromHex("0200"), 0b1111, 0b1111, 0b1111, []common.Hash{{}, {}, {}, {}})
-	sc.SetAccountHashesRead(common.FromHex("0201"), 0b11, 0b11, 0b11, []common.Hash{{}, {}})
-	sc.SetAccountHashesRead(common.FromHex("03"), 0b11, 0b11, 0b11, []common.Hash{{}, {}})
-	ranges, err := collectMissedAccTrie(func(prefix []byte) (bool, []byte) {
-		if bytes.Equal(prefix, common.FromHex("02")) {
-			return false, nil
-		}
-		if bytes.Equal(prefix, common.FromHex("0200")) {
-			return false, nil
-		}
-		if bytes.Equal(prefix, common.FromHex("020000")) {
-			return false, nil
-		}
-		return true, nil
-	}, []byte{}, sc, nil)
-	require.NoError(t, err)
-	require.Equal(t, fmt.Sprintf("%x", ranges[0]), "020000")
 }
