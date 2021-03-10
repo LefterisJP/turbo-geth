@@ -1514,36 +1514,16 @@ func loadAccsToCache(accs ethdb.Cursor, accMisses [][]byte, cache *shards.StateC
 		}
 		hexutil.CompressNibbles(miss, &miss)
 		if err := ethdb.Walk(accs, miss, fixedBits, func(k, v []byte) (bool, error) {
-			var incarnation uint64
 			accountHash := common.BytesToHash(k)
-			b, ok := cache.GetAccountByHashedAddress(accountHash)
-			if !ok {
-				var a accounts.Account
-				if err := a.DecodeForStorage(v); err != nil {
-					return false, err
-				}
-				incarnation = a.Incarnation
-				cache.DeprecatedSetAccountRead(accountHash, &a)
-			} else {
-				incarnation = b.Incarnation
-			}
-			if incarnation == 0 {
+			_, ok := cache.GetAccountByHashedAddress(accountHash)
+			if ok {
 				return true, nil
 			}
-
-			//if err := cache.StorageTree("loadAccsToCache", accountHash, incarnation, func(k []byte, v common.Hash, hasTree, hasHash bool) (toChild bool, err error) {
-			//	if k == nil || !hasHash {
-			//		return hasTree, nil
-			//	}
-			//	if ok, _ = canUse(k); ok {
-			//		return false, nil
-			//	}
-			//	return hasTree, common.Stopped(quit)
-			//}, func(k []byte) {
-			//	misses = append(misses, common.CopyBytes(k))
-			//}); err != nil {
-			//	return false, err
-			//}
+			var a accounts.Account
+			if err := a.DecodeForStorage(v); err != nil {
+				return false, err
+			}
+			cache.DeprecatedSetAccountRead(accountHash, &a)
 			return true, nil
 		}); err != nil {
 			return err
@@ -1608,6 +1588,7 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 		quit); err != nil {
 		return err
 	}
+	fmt.Printf("accMiss:%x\n", accMiss)
 	if err := loadAccsToCache(accs, accMiss, cache, quit); err != nil {
 		return err
 	}
@@ -1653,7 +1634,7 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		if !hasTree && !hasHash {
 			skipState = false
-			if !cache.HasAccountWithInPrefix(k) {
+			if !cache.HasAccountWithHexPrefix(k) {
 				onAccountMiss(k)
 			}
 			return hasTree, nil
@@ -1677,7 +1658,7 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		//skipState = skipState && hasTree
 		if !hasTree {
 			skipState = false
-			if !cache.HasAccountWithInPrefix(k) {
+			if !cache.HasAccountWithHexPrefix(k) {
 				onAccountMiss(k)
 			}
 		}
@@ -1708,7 +1689,7 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 		}
 		if !hasTree && !hasHash {
 			skipState = false
-			if !cache.HasStorageWithInPrefix(accHash, incarnation, k) {
+			if !cache.HasStorageWithHexPrefix(accHash, incarnation, k) {
 				kBuf = kBuf[:common.HashLength+common.IncarnationLength+len(k)]
 				copy(kBuf, accHash.Bytes())
 				binary.BigEndian.PutUint64(kBuf[32:], incarnation)
@@ -1735,7 +1716,7 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 		//skipState = skipState && hasTree
 		if !hasTree {
 			skipState = false
-			if !cache.HasStorageWithInPrefix(accHash, incarnation, k) {
+			if !cache.HasStorageWithHexPrefix(accHash, incarnation, k) {
 				kBuf = kBuf[:common.HashLength+common.IncarnationLength+len(k)]
 				copy(kBuf, accHash.Bytes())
 				binary.BigEndian.PutUint64(kBuf[32:], incarnation)

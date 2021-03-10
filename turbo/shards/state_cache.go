@@ -11,6 +11,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
+	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/metrics"
 )
 
@@ -48,7 +49,9 @@ const (
 
 // AccountSeek allows to traverse sub-tree
 type AccountSeek struct {
-	seek []byte
+	seek       []byte
+	fixedBytes int
+	mask       byte
 }
 
 // StorageSeek allows to traverse sub-tree
@@ -56,6 +59,8 @@ type StorageSeek struct {
 	addrHash    common.Hash
 	incarnation uint64
 	seek        []byte
+	fixedBytes  int
+	mask        byte
 }
 
 // AccountItem is an element in the `readWrites` B-tree representing an Ethereum account. It can mean either value
@@ -150,9 +155,11 @@ func compare_code_code(i1 *CodeItem, i2 *CodeItem) int {
 func (r *AccountSeek) Less(than btree.Item) bool {
 	switch i := than.(type) {
 	case *AccountItem:
-		return bytes.Compare(r.seek, i.addrHash.Bytes()) < 0
+		return less(r.seek, i.addrHash.Bytes(), r.fixedBytes, r.mask)
+		//return bytes.Compare(r.seek, i.addrHash.Bytes()) < 0
 	case *AccountWriteItem:
-		return bytes.Compare(r.seek, i.ai.addrHash.Bytes()) < 0
+		return less(r.seek, i.ai.addrHash.Bytes(), r.fixedBytes, r.mask)
+		//return bytes.Compare(r.seek, i.ai.addrHash.Bytes()) < 0
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", than))
 	}
@@ -168,7 +175,8 @@ func (r *StorageSeek) Less(than btree.Item) bool {
 		if r.incarnation < i.incarnation {
 			return true
 		}
-		return bytes.Compare(r.seek, i.locHash.Bytes()) < 0
+		return less(r.seek, i.locHash.Bytes(), r.fixedBytes, r.mask)
+		//return bytes.Compare(r.seek, i.locHash.Bytes()) < 0
 	case *StorageWriteItem:
 		c := bytes.Compare(r.addrHash.Bytes(), i.si.addrHash.Bytes())
 		if c != 0 {
@@ -177,7 +185,8 @@ func (r *StorageSeek) Less(than btree.Item) bool {
 		if r.incarnation < i.si.incarnation {
 			return true
 		}
-		return bytes.Compare(r.seek, i.si.locHash.Bytes()) < 0
+		return less(r.seek, i.si.locHash.Bytes(), r.fixedBytes, r.mask)
+		//return bytes.Compare(r.seek, i.si.locHash.Bytes()) < 0
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", than))
 	}
@@ -190,7 +199,8 @@ func (ai *AccountItem) Less(than btree.Item) bool {
 	case *AccountWriteItem:
 		return bytes.Compare(ai.addrHash.Bytes(), i.ai.addrHash.Bytes()) < 0
 	case *AccountSeek:
-		return bytes.Compare(ai.addrHash.Bytes(), i.seek) < 0
+		return less(ai.addrHash.Bytes(), i.seek, i.fixedBytes, i.mask)
+		//return bytes.Compare(ai.addrHash.Bytes(), i.seek) < 0
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", than))
 	}
@@ -222,7 +232,7 @@ func (ai *AccountItem) CopyValueFrom(item CacheItem) {
 }
 
 func (swi *StorageWriteItem) Less(than btree.Item) bool {
-	return swi.si.Less(than.(*StorageWriteItem).si)
+	return swi.si.Less(than)
 }
 func (swi *StorageWriteItem) GetCacheItem() CacheItem     { return swi.si }
 func (swi *StorageWriteItem) SetCacheItem(item CacheItem) { swi.si = item.(*StorageItem) }
@@ -256,7 +266,8 @@ func (si *StorageItem) Less(than btree.Item) bool {
 		if si.incarnation < i.incarnation {
 			return true
 		}
-		return bytes.Compare(si.locHash.Bytes(), i.seek) < 0
+		return less(si.locHash.Bytes(), i.seek, i.fixedBytes, i.mask)
+		//return bytes.Compare(si.locHash.Bytes(), i.seek) < 0
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", than))
 	}
@@ -443,22 +454,27 @@ func (sc *StateCache) GetAccount(address []byte) (*accounts.Account, bool) {
 	return nil, false
 }
 
-func (sc *StateCache) HasAccountWithInPrefix(addrHashPrefix []byte) bool {
-	seek := &AccountSeek{seek: addrHashPrefix}
+func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
+	fixedbytes, mask := ethdb.Bytesmask(len(hexPrefix) * 4)
+	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
+	if len(seek.seek)%2 == 1 {
+		seek.seek = append(seek.seek, 0)
+	}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		found = bytes.HasPrefix(i.(*AccountItem).addrHash.Bytes(), addrHashPrefix)
+		found = bytes.HasPrefix(i.(*AccountItem).addrHash.Bytes(), hexPrefix)
 		return false
 	})
 	return found
 }
 
-func (sc *StateCache) HasStorageWithInPrefix(addrHash common.Hash, incarnation uint64, locHashPrefix []byte) bool {
-	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashPrefix}
+func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation uint64, locHashHexPrefix []byte) bool {
+	fixedbytes, mask := ethdb.Bytesmask(len(locHashHexPrefix) * 4)
+	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashHexPrefix, fixedBytes: fixedbytes, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		ii := i.(*StorageItem)
-		found = ii.addrHash == addrHash && ii.incarnation == incarnation && bytes.HasPrefix(ii.locHash.Bytes(), locHashPrefix)
+		found = ii.addrHash == addrHash && ii.incarnation == incarnation && bytes.HasPrefix(ii.locHash.Bytes(), locHashHexPrefix)
 		return false
 	})
 	return found
@@ -1036,3 +1052,11 @@ func (sc *StateCache) WriteCount() (res int) {
 }
 func (sc *StateCache) WriteSize() int { return sc.writeSize }
 func (sc *StateCache) ReadSize() int  { return sc.readSize }
+
+func less(k, k2 []byte, fixedbytes int, mask byte) bool {
+	cmp := bytes.Compare(k[:fixedbytes], k2[:fixedbytes])
+	if cmp == 0 {
+		return k[fixedbytes]&mask < k2[fixedbytes]&mask
+	}
+	return cmp < 0
+}
