@@ -464,7 +464,7 @@ func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		found = bytes.HasPrefix(i.(*AccountItem).addrHash.Bytes(), hexPrefix)
+		found = hasPrefix(i.(*AccountItem).addrHash.Bytes(), seek.seek, seek.fixedBytes, seek.mask)
 		return false
 	})
 	return found
@@ -480,7 +480,7 @@ func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation 
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		ii := i.(*StorageItem)
-		found = ii.addrHash == addrHash && ii.incarnation == incarnation && bytes.HasPrefix(ii.locHash.Bytes(), locHashHexPrefix)
+		found = ii.addrHash == addrHash && ii.incarnation == incarnation && hasPrefix(ii.locHash.Bytes(), seek.seek, seek.fixedBytes, seek.mask)
 		return false
 	})
 	return found
@@ -1065,4 +1065,7 @@ func less(k, k2 []byte, fixedbytes int, mask byte) bool {
 		return k[fixedbytes]&mask < k2[fixedbytes]&mask
 	}
 	return cmp < 0
+}
+func hasPrefix(k, k2 []byte, fixedbytes int, mask byte) bool {
+	return bytes.Compare(k[:fixedbytes], k2[:fixedbytes]) == 0 && k[fixedbytes]&mask == k2[fixedbytes]&mask
 }
