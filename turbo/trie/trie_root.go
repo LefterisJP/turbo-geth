@@ -1404,8 +1404,6 @@ func keyIsBefore(k1, k2 []byte) bool {
 func UnmarshalTrieNodeTyped(v []byte) (hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	hasState, hasTree, hasHash, v = binary.BigEndian.Uint16(v), binary.BigEndian.Uint16(v[2:]), binary.BigEndian.Uint16(v[4:]), v[6:]
 	hashes = make([]common.Hash, len(v)/common.HashLength)
-	fmt.Printf("a:%d\n", len(v))
-	fmt.Printf("b:%d\n", bits.OnesCount16(hasHash))
 	for i := 0; i < len(hashes); i++ {
 		hashes[i].SetBytes(common.CopyBytes(v[i*common.HashLength : (i+1)*common.HashLength]))
 	}
