@@ -10,6 +10,7 @@ import (
 	"github.com/google/btree"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
+	"github.com/ledgerwatch/turbo-geth/common/hexutil"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/metrics"
@@ -456,10 +457,11 @@ func (sc *StateCache) GetAccount(address []byte) (*accounts.Account, bool) {
 
 func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 	fixedbytes, mask := ethdb.Bytesmask(len(hexPrefix) * 4)
-	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
-	if len(seek.seek)%2 == 1 {
-		seek.seek = append(seek.seek, 0)
+	if len(hexPrefix)%2 == 1 {
+		hexPrefix = append(hexPrefix, 0)
 	}
+	hexutil.CompressNibbles(hexPrefix, &hexPrefix)
+	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		found = bytes.HasPrefix(i.(*AccountItem).addrHash.Bytes(), hexPrefix)
@@ -470,7 +472,11 @@ func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 
 func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation uint64, locHashHexPrefix []byte) bool {
 	fixedbytes, mask := ethdb.Bytesmask(len(locHashHexPrefix) * 4)
-	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashHexPrefix, fixedBytes: fixedbytes, mask: mask}
+	if len(locHashHexPrefix)%2 == 1 {
+		locHashHexPrefix = append(locHashHexPrefix, 0)
+	}
+	hexutil.CompressNibbles(locHashHexPrefix, &locHashHexPrefix)
+	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashHexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		ii := i.(*StorageItem)
