@@ -1577,7 +1577,7 @@ func (l *FlatDBTrieLoader) prep(tx ethdb.Tx, ss ethdb.CursorDupSort, prefix []by
 	if err := loadAccTrieToCache(tx, prefix, accTrieMiss, cache, quit); err != nil {
 		return err
 	}
-	if !cache.HasAccountWithHexPrefix(prefix) {
+	if !cache.HasAccountTrieWithPrefix(prefix) || !cache.HasAccountWithHexPrefix(prefix) {
 		accMiss = append(accMiss, prefix)
 	} else {
 		if err := l.post("prep2", ss, prefix, cache, false,
@@ -1633,9 +1633,6 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		}
 		if !hasTree && !hasHash {
 			skipState = false
-			if logPrefix == "prep3" {
-				fmt.Printf("b: %x,%t\n", k, cache.HasAccountWithHexPrefix(k))
-			}
 			if !cache.HasAccountWithHexPrefix(k) {
 				onAccountMiss(k)
 			}
@@ -1661,9 +1658,6 @@ func (l *FlatDBTrieLoader) walkAccountTree(logPrefix string, prefix []byte, doDe
 		if !hasTree {
 			skipState = false
 			if !cache.HasAccountWithHexPrefix(k) {
-				if logPrefix == "prep3" {
-					fmt.Printf("b: %x,%t\n", k, cache.HasAccountWithHexPrefix(k))
-				}
 				onAccountMiss(k)
 			}
 		}
@@ -1760,9 +1754,6 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 				return false, nil
 			}
 			l.accountValue.Copy(acc)
-			if logPrefix == "post" {
-				fmt.Printf("a: %x\n", l.kHex)
-			}
 			if err := l.receiver.Receive(AccountStreamItem, l.kHex, nil, &l.accountValue, nil, nil, false, 0); err != nil {
 				return false, err
 			}

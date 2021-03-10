@@ -10,6 +10,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
+	"github.com/ledgerwatch/turbo-geth/ethdb"
 )
 
 // An optional addition to the state cache, helping to calculate state root
@@ -722,7 +723,8 @@ func WalkStorageHashesWrites(writes [5]*btree.BTree, update func(addrHash common
 }
 
 func (sc *StateCache) WalkStorage(addrHash common.Hash, incarnation uint64, prefix []byte, walker func(locHash common.Hash, val []byte) error) error {
-	seek := &StorageSeek{seek: prefix}
+	fixedbytes, mask := ethdb.Bytesmask(len(prefix) * 8)
+	seek := &StorageSeek{seek: prefix, fixedBytes: fixedbytes - 1, mask: mask}
 	id := id(seek)
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		switch it := i.(type) {
@@ -753,7 +755,8 @@ func (sc *StateCache) WalkStorage(addrHash common.Hash, incarnation uint64, pref
 }
 
 func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Hash, acc *accounts.Account) (bool, error)) error {
-	seek := &AccountSeek{seek: prefix}
+	fixedbytes, mask := ethdb.Bytesmask(len(prefix) * 8)
+	seek := &AccountSeek{seek: prefix, fixedBytes: fixedbytes - 1, mask: mask}
 	id := id(seek)
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		switch it := i.(type) {

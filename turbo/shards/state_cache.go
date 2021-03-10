@@ -488,8 +488,6 @@ func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation 
 
 // GetDeletedAccount attempts to retrieve the last version of account before it was deleted
 func (sc *StateCache) GetDeletedAccount(address []byte) *accounts.Account {
-	panic(1)
-
 	key := &AccountItem{}
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
