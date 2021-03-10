@@ -342,16 +342,16 @@ func (r *RootHashAggregator) Receive(itemType StreamItem,
 	cutoff int,
 ) error {
 	//r.traceIf("9c3dc2561d472d125d8f87dde8f2e3758386463ade768ae1a1546d34101968bb", "00")
-	//if storageKey == nil {
-	//	//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
-	//	fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
-	//	//}
-	//} else {
-	//	//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
-	//	//fmt.Printf("%x\n", storageKey)
-	//	fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
-	//	//}
-	//}
+	if storageKey == nil {
+		//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
+		fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
+		//}
+	} else {
+		//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
+		//fmt.Printf("%x\n", storageKey)
+		fmt.Printf("1: %d, %x, %x, %x\n", itemType, accountKey, storageKey, hash)
+		//}
+	}
 
 	switch itemType {
 	case StorageStreamItem:
@@ -1404,6 +1404,8 @@ func keyIsBefore(k1, k2 []byte) bool {
 func UnmarshalTrieNodeTyped(v []byte) (hasState, hasTree, hasHash uint16, hashes []common.Hash) {
 	hasState, hasTree, hasHash, v = binary.BigEndian.Uint16(v), binary.BigEndian.Uint16(v[2:]), binary.BigEndian.Uint16(v[4:]), v[6:]
 	hashes = make([]common.Hash, len(v)/common.HashLength)
+	fmt.Printf("a:%d\n", len(v))
+	fmt.Printf("b:%d\n", bits.OnesCount16(hasHash))
 	for i := 0; i < len(hashes); i++ {
 		hashes[i].SetBytes(common.CopyBytes(v[i*common.HashLength : (i+1)*common.HashLength]))
 	}
