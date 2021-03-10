@@ -1588,7 +1588,7 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	if err := l.post(ss, prefix, cache, false,
 		func(k []byte) { accTrieMiss = append(accTrieMiss, common.CopyBytes(k)) },
 		func(k []byte) {},
-		func(k []byte) { stTrieMiss = append(stTrieMiss, common.CopyBytes(k)) },
+		func(k []byte) {},
 		func(k []byte) {},
 		quit); err != nil {
 		return err
@@ -1597,8 +1597,8 @@ func (l *FlatDBTrieLoader) prep(accs, trieAcc ethdb.Cursor, ss ethdb.CursorDupSo
 	if err := loadAccTrieToCache(trieAcc, prefix, accTrieMiss, cache, quit); err != nil {
 		return err
 	}
-	if err := loadStorageTrieToCache(trieAcc, prefix, stTrieMiss, cache, quit); err != nil {
-		return err
+	if !cache.HasAccountTrieWithPrefix(prefix) {
+		accMiss = append(accMiss, prefix)
 	}
 	if err := l.post(ss, prefix, cache, false,
 		func(k []byte) { panic(fmt.Errorf("key %x not found in cache", k)) },
@@ -1709,7 +1709,11 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 		if !hasTree && !hasHash {
 			skipState = false
 			if !cache.HasStorageWithInPrefix(accHash, incarnation, k) {
-				onStorageMiss(k)
+				kBuf = kBuf[:common.HashLength+common.IncarnationLength+len(k)]
+				copy(kBuf, accHash.Bytes())
+				binary.BigEndian.PutUint64(kBuf[32:], incarnation)
+				copy(kBuf[40:], k)
+				onStorageMiss(kBuf)
 			}
 			return hasTree, nil
 		}
@@ -1732,7 +1736,11 @@ func (l *FlatDBTrieLoader) walkStorageTree(logPrefix string, accHash common.Hash
 		if !hasTree {
 			skipState = false
 			if !cache.HasStorageWithInPrefix(accHash, incarnation, k) {
-				onStorageMiss(k)
+				kBuf = kBuf[:common.HashLength+common.IncarnationLength+len(k)]
+				copy(kBuf, accHash.Bytes())
+				binary.BigEndian.PutUint64(kBuf[32:], incarnation)
+				copy(kBuf[40:], k)
+				onStorageMiss(kBuf)
 			}
 		}
 		if doDelete {
