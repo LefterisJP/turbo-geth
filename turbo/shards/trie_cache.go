@@ -758,12 +758,9 @@ func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Ha
 	fixedbytes, mask := ethdb.Bytesmask(len(prefix) * 8)
 	seek := &AccountSeek{seek: prefix, fixedBytes: fixedbytes - 1, mask: mask}
 	id := id(seek)
-	fmt.Printf("accSeek:%x,%d,%x\n", prefix, fixedbytes, mask)
 	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
-		fmt.Printf("%T\n", i)
 		switch it := i.(type) {
 		case *AccountItem:
-			fmt.Printf("k:%x\n", it.addrHash)
 			if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 				return true
 			}
@@ -773,7 +770,6 @@ func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Ha
 				return false
 			}
 		case *AccountWriteItem:
-			fmt.Printf("k2:%x\n", it.ai.addrHash)
 			if it.ai.HasFlag(AbsentFlag) || it.ai.HasFlag(DeletedFlag) {
 				return true
 			}

@@ -368,6 +368,8 @@ type StateCache struct {
 	writeSize   int
 	sequence    int                // Current sequence assigned to any item that has been "touched" (created, deleted, read). Incremented after every touch
 	unprocQueue [5]UnprocessedHeap // Priority queue of items appeared since last root calculation processing (sorted by the keys - addrHash, incarnation, locHash)
+
+	buf []byte
 }
 
 func id(a interface{}) uint8 {
@@ -458,10 +460,12 @@ func (sc *StateCache) GetAccount(address []byte) (*accounts.Account, bool) {
 func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 	fixedbytes, mask := ethdb.Bytesmask(len(hexPrefix) * 4)
 	if len(hexPrefix)%2 == 1 {
-		hexPrefix = append(hexPrefix, 0)
+		sc.buf = append(append(sc.buf[:0], hexPrefix...), 0)
+	} else {
+		sc.buf = append(sc.buf[:0], hexPrefix...)
 	}
-	hexutil.CompressNibbles(hexPrefix, &hexPrefix)
-	seek := &AccountSeek{seek: hexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
+	hexutil.CompressNibbles(sc.buf, &sc.buf)
+	seek := &AccountSeek{seek: sc.buf, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		found = hasPrefix(i.(*AccountItem).addrHash.Bytes(), seek.seek, seek.fixedBytes, seek.mask)
@@ -473,10 +477,12 @@ func (sc *StateCache) HasAccountWithHexPrefix(hexPrefix []byte) bool {
 func (sc *StateCache) HasStorageWithHexPrefix(addrHash common.Hash, incarnation uint64, locHashHexPrefix []byte) bool {
 	fixedbytes, mask := ethdb.Bytesmask(len(locHashHexPrefix) * 4)
 	if len(locHashHexPrefix)%2 == 1 {
-		locHashHexPrefix = append(locHashHexPrefix, 0)
+		sc.buf = append(append(sc.buf[:0], locHashHexPrefix...), 0)
+	} else {
+		sc.buf = append(sc.buf[:0], locHashHexPrefix...)
 	}
-	hexutil.CompressNibbles(locHashHexPrefix, &locHashHexPrefix)
-	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: locHashHexPrefix, fixedBytes: fixedbytes - 1, mask: mask}
+	hexutil.CompressNibbles(sc.buf, &sc.buf)
+	seek := &StorageSeek{addrHash: addrHash, incarnation: incarnation, seek: sc.buf, fixedBytes: fixedbytes - 1, mask: mask}
 	var found bool
 	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		ii := i.(*StorageItem)
