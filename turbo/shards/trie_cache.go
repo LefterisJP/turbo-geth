@@ -29,7 +29,7 @@ type AccountTrieItem struct {
 	queuePos                   int
 	flags                      uint16
 	hasState, hasTree, hasHash uint16
-	loadedFromDB               uint16
+	loadedFromDB               uint16        // prefix loaded from DB (must set at loading, and unset at eviction)
 	hashes                     []common.Hash // TODO: store it as fixed size flat array?
 	addrHashPrefix             []byte
 }
@@ -347,7 +347,6 @@ func (sc *StateCache) MarkAccountTrieAsLoaded(prefix []byte) {
 func (sc *StateCache) FindDeepestAccountTrie(prefix []byte) (ihK []byte, childHasState, childLoaded, trieMiss bool) {
 	for i := 1; i < len(prefix); i++ {
 		k, hasState, hasTree, _, _, loaded := sc.AccountHashesSeek(prefix[:i])
-		fmt.Printf("seek: %x->%x\n", prefix[:i], k)
 		if k == nil || !bytes.HasPrefix(k, prefix[:i]) {
 			if i == 1 {
 				return nil, false, false, false

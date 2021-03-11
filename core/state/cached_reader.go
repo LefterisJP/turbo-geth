@@ -2,7 +2,6 @@ package state
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
@@ -56,7 +55,6 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 	hexutil.DecompressNibbles(hashed[:], &hashedNibbles)
 	// TODO: if hasTree but no such ihK in cache - then need load this part of trie from disk to cache
 	ihK, hasState, alreadyLoaded, trieMiss := cr.cache.FindDeepestAccountTrie(hashedNibbles[:])
-	fmt.Printf("need load: %x->%x,%t,%t,%t\n", hashedNibbles, ihK, hasState, alreadyLoaded, trieMiss)
 	if trieMiss {
 		if err := cr.r.(*PlainStateReader).db.Walk(dbutils.TrieOfAccountsBucket, ihK, len(ihK)*8, func(k, v []byte) (bool, error) {
 			hasState, hasTree, hasHash, newV := trie.UnmarshalTrieNodeTyped(v)
@@ -67,7 +65,6 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 		}
 		ihK, hasState, alreadyLoaded, trieMiss = cr.cache.FindDeepestAccountTrie(hashedNibbles[:])
 	}
-	fmt.Printf("need load: %x->%x,%t,%t,%t\n", hashedNibbles, ihK, hasState, alreadyLoaded, trieMiss)
 
 	if ihK == nil {
 		a, err := cr.r.ReadAccountData(address)
