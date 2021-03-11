@@ -1059,10 +1059,13 @@ func (sc *StateCache) WriteCount() (res int) {
 func (sc *StateCache) WriteSize() int { return sc.writeSize }
 func (sc *StateCache) ReadSize() int  { return sc.readSize }
 
-func less(k, k2 []byte, fixedbytes int, mask byte) bool {
+func less(k, k2 []byte, fixedbytes int, mask byte) (isLess bool) {
 	cmp := bytes.Compare(k[:fixedbytes], k2[:fixedbytes])
 	if cmp == 0 {
-		return k[fixedbytes]&mask < k2[fixedbytes]&mask
+		cmp = int(k[fixedbytes]&mask) - int(k2[fixedbytes]&mask)
+	}
+	if cmp == 0 {
+		cmp = len(k) - len(k2)
 	}
 	return cmp < 0
 }
