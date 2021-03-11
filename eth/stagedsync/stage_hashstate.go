@@ -287,46 +287,46 @@ func getExtractFunc(db ethdb.Tx, cache *shards.StateCache, changeSetBucket strin
 		if err != nil {
 			return err
 		}
-		if cache != nil {
-			if len(k) == 20 {
-				_, inCache := cache.GetAccount(k)
-				if len(value) == 0 {
-					if inCache {
-						cache.SetAccountDelete(k)
-					} else {
-						cache.SetAccountAbsent(k)
-					}
-				} else {
-					acc := &accounts.Account{}
-					err = acc.DecodeForStorage(value)
-					if err != nil {
-						return err
-					}
-					if inCache {
-						cache.SetAccountWrite(k, acc)
-					} else {
-						cache.SetAccountRead(k, acc)
-					}
-				}
-			} else {
-				stK, inc, stHash := k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:]
-				_, inCache := cache.GetStorage(stK, inc, stHash)
-				if len(value) == 0 {
-					if inCache {
-						cache.SetStorageDelete(stK, inc, stHash)
-					} else {
-						cache.SetStorageAbsent(stK, inc, stHash)
-					}
-				} else {
-					if inCache {
-						cache.SetStorageWrite(stK, inc, stHash, value)
-					} else {
-						cache.SetStorageRead(stK, inc, stHash, value)
-					}
-				}
-			}
-			cache.TurnWritesToReads(cache.PrepareWrites())
-		}
+		//if cache != nil {
+		//	if len(k) == 20 {
+		//		_, inCache := cache.GetAccount(k)
+		//		if len(value) == 0 {
+		//			if inCache {
+		//				cache.SetAccountDelete(k)
+		//			} else {
+		//				cache.SetAccountAbsent(k)
+		//			}
+		//		} else {
+		//			acc := &accounts.Account{}
+		//			err = acc.DecodeForStorage(value)
+		//			if err != nil {
+		//				return err
+		//			}
+		//			if inCache {
+		//				cache.SetAccountWrite(k, acc)
+		//			} else {
+		//				cache.SetAccountRead(k, acc)
+		//			}
+		//		}
+		//	} else {
+		//		stK, inc, stHash := k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:]
+		//		_, inCache := cache.GetStorage(stK, inc, stHash)
+		//		if len(value) == 0 {
+		//			if inCache {
+		//				cache.SetStorageDelete(stK, inc, stHash)
+		//			} else {
+		//				cache.SetStorageAbsent(stK, inc, stHash)
+		//			}
+		//		} else {
+		//			if inCache {
+		//				cache.SetStorageWrite(stK, inc, stHash, value)
+		//			} else {
+		//				cache.SetStorageRead(stK, inc, stHash, value)
+		//			}
+		//		}
+		//	}
+		//	cache.TurnWritesToReads(cache.PrepareWrites())
+		//}
 
 		return next(dbKey, newK, value)
 	}

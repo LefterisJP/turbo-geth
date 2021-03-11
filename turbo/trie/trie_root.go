@@ -1464,14 +1464,14 @@ func CastTrieNodeValue(hashes, rootHash []byte) []common.Hash {
 	return to
 }
 
-func loadAccTrieToCache(tx ethdb.Tx, prefix []byte, misses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
+func loadAccTrieToCache(tx ethdb.Tx, misses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
 	c := tx.Cursor(dbutils.TrieOfAccountsBucket)
 	defer c.Close()
 	for _, miss := range misses {
 		if err := common.Stopped(quit); err != nil {
 			return err
 		}
-		for k, v, err := c.Seek(miss); k != nil && bytes.HasPrefix(k, miss) && bytes.HasPrefix(k, prefix); k, v, err = c.Next() {
+		for k, v, err := c.Seek(miss); k != nil && bytes.HasPrefix(k, miss); k, v, err = c.Next() {
 			if err != nil {
 				return err
 			}
@@ -1519,6 +1519,7 @@ func loadAccsToCache(tx ethdb.Tx, accMisses [][]byte, cache *shards.StateCache, 
 			if ok {
 				return true, nil
 			}
+
 			var a accounts.Account
 			if err := a.DecodeForStorage(v); err != nil {
 				return false, err
@@ -1556,6 +1557,7 @@ func loadStorageToCache(ss ethdb.Cursor, misses [][]byte, cache *shards.StateCac
 		}); err != nil {
 			return err
 		}
+		cache.MarkAccountTrieAsLoaded(miss)
 	}
 	return nil
 }
@@ -1574,7 +1576,7 @@ func (l *FlatDBTrieLoader) prep(tx ethdb.Tx, ss ethdb.CursorDupSort, prefix []by
 		quit); err != nil {
 		return err
 	}
-	if err := loadAccTrieToCache(tx, prefix, accTrieMiss, cache, quit); err != nil {
+	if err := loadAccTrieToCache(tx, accTrieMiss, cache, quit); err != nil {
 		return err
 	}
 	if !cache.HasAccountTrieWithPrefix(prefix) || !cache.HasAccountWithHexPrefix(prefix) {
@@ -1742,6 +1744,9 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 	}
 
 	if err := l.walkAccountTree(logPrefix, prefix, doDelete, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
+		if bytes.HasPrefix(ihK, common.FromHex("0502")) {
+			fmt.Printf("9:%x,%t,%x\n", ihK, skipState, accSeek)
+		}
 		if skipState {
 			goto SkipAccounts
 		}

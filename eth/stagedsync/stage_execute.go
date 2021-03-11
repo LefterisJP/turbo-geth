@@ -85,6 +85,9 @@ func executeBlockWithGo(block *types.Block, tx ethdb.Database, cache *shards.Sta
 		stateReader = state.NewPlainStateReader(batch)
 	}
 	if cache != nil {
+		if err := cacheWarmUpIfNeed(tx, cache); err != nil {
+			return err
+		}
 		stateReader = state.NewCachedReader(stateReader, cache)
 	}
 
@@ -297,16 +300,29 @@ func SpawnExecuteBlocksStage(s *StageState, stateDB ethdb.Database, chainConfig 
 
 func commitCache(tx ethdb.DbWithPendingMutations, writes [5]*btree.BTree) error {
 	return shards.WalkWrites(writes,
-		func(address []byte, account *accounts.Account) error { // accountWrite
+		func(address []byte, addrHash common.Hash, account *accounts.Account) error { // accountWrite
 			//fmt.Printf("account write %x: balance %d, nonce %d\n", address, account.Balance.ToBig(), account.Nonce)
 			value := make([]byte, account.EncodingLengthForStorage())
 			account.EncodeForStorage(value)
-			return tx.Put(dbutils.PlainStateBucket, address, value)
+			if err := tx.Put(dbutils.PlainStateBucket, address, value); err != nil {
+				return err
+			}
+			if state.ReadStateByPrefixes {
+				if err := tx.Put(dbutils.HashedAccountsBucket, addrHash.Bytes(), value); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
-		func(address []byte, original *accounts.Account) error { // accountDelete
+		func(address []byte, addrHash common.Hash, original *accounts.Account) error { // accountDelete
 			//fmt.Printf("account delete %x\n", address)
 			if err := tx.Delete(dbutils.PlainStateBucket, address[:], nil); err != nil {
 				return err
+			}
+			if state.ReadStateByPrefixes {
+				if err := tx.Put(dbutils.HashedStorageBucket, addrHash.Bytes(), nil); err != nil {
+					return err
+				}
 			}
 			if original != nil && original.Incarnation > 0 {
 				var b [8]byte
