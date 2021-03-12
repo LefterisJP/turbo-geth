@@ -80,11 +80,11 @@ func OnAccountMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.
 			if len(enc) == 0 {
 				return nil, nil
 			}
-			var a accounts.Account
+			a := &accounts.Account{}
 			if err = a.DecodeForStorage(enc); err != nil {
 				return nil, err
 			}
-			return &a, nil
+			return a, nil
 		}
 		a, err := readAcc(addrHash)
 		if err != nil {
@@ -108,24 +108,19 @@ func OnAccountMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.
 	}
 	hexutil.CompressNibbles(buf, &buf)
 	found := false
-	var a *accounts.Account
+	a := &accounts.Account{}
 	if err := db.Walk(dbutils.HashedAccountsBucket, buf, fixedBits, func(k, v []byte) (bool, error) {
-		acc, ok := cache.GetAccountByHashedAddress(common.BytesToHash(k))
-		if ok {
-			if bytes.Equal(k, addrHash[:]) {
-				found = true
-				a = acc
-			}
+		if _, ok := cache.GetAccountByHashedAddress(common.BytesToHash(k)); ok {
 			return true, nil
 		}
-		acc = new(accounts.Account)
+		acc := new(accounts.Account)
 		if err := acc.DecodeForStorage(v); err != nil {
 			return false, err
 		}
 		cache.SetAccountRead(common.BytesToHash(k), acc)
 		if bytes.Equal(k, addrHash[:]) {
 			found = true
-			a = acc
+			a.Copy(acc)
 		}
 		return true, nil
 	}); err != nil {
@@ -227,12 +222,7 @@ func OnStorageMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.
 	found := false
 	var v []byte
 	if err := db.Walk(dbutils.HashedStorageBucket, buf, fixedBits, func(k, vv []byte) (bool, error) {
-		_, ok := cache.GetStorageByHashedAddress(addrHash, incarnation, common.BytesToHash(k[40:]))
-		if ok {
-			if bytes.Equal(k, addrHash[:]) {
-				found = true
-				v = vv
-			}
+		if _, ok := cache.GetStorageByHashedAddress(addrHash, incarnation, common.BytesToHash(k[40:])); ok {
 			return true, nil
 		}
 		cache.DeprecatedSetStorageRead(addrHash, incarnation, common.BytesToHash(k[40:]), vv)

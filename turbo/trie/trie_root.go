@@ -343,9 +343,9 @@ func (r *RootHashAggregator) Receive(itemType StreamItem,
 ) error {
 	//r.traceIf("9c3dc2561d472d125d8f87dde8f2e3758386463ade768ae1a1546d34101968bb", "00")
 	if storageKey == nil {
-		//if bytes.HasPrefix(accountKey, common.FromHex("08050d07")) {
-		fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
-		//}
+		if bytes.HasPrefix(accountKey, common.FromHex("c6")) {
+			fmt.Printf("1: %d, %x, %x\n", itemType, accountKey, hash)
+		}
 	} else {
 		//if bytes.HasPrefix(accountKey, common.FromHex("876f5a0f54b30254d2bad26bb5a8da19cbe748fd033004095d9c96c8e667376b")) && bytes.HasPrefix(storageKey, common.FromHex("")) {
 		//fmt.Printf("%x\n", storageKey)
@@ -1563,7 +1563,7 @@ func loadStorageToCache(ss ethdb.Cursor, misses [][]byte, cache *shards.StateCac
 }
 
 func (l *FlatDBTrieLoader) prep(tx ethdb.Tx, ss ethdb.CursorDupSort, prefix []byte, cache *shards.StateCache, quit <-chan struct{}) error {
-	defer func(t time.Time) { fmt.Printf("trie_root.go:338: %s\n", time.Since(t)) }(time.Now())
+	//defer func(t time.Time) { fmt.Printf("trie_root.go:338: %s\n", time.Since(t)) }(time.Now())
 	receiver := l.receiver
 	defer func() { l.receiver = receiver }()
 	l.receiver = NewNoopReceiver()
@@ -1591,7 +1591,7 @@ func (l *FlatDBTrieLoader) prep(tx ethdb.Tx, ss ethdb.CursorDupSort, prefix []by
 			return err
 		}
 	}
-	fmt.Printf("accMiss:%x\n", accMiss)
+	//fmt.Printf("accMiss:%x\n", accMiss)
 	if err := loadAccsToCache(tx, accMiss, cache, quit); err != nil {
 		return err
 	}
@@ -1737,20 +1737,17 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 	l.accSeek = make([]byte, 0, 64)
 	logEvery := time.NewTicker(30 * time.Second)
 	defer logEvery.Stop()
-	defer func(t time.Time) { fmt.Printf("trie_root.go:375: %s\n", time.Since(t)) }(time.Now())
+	//defer func(t time.Time) { fmt.Printf("trie_root.go:375: %s\n", time.Since(t)) }(time.Now())
 	var canUse = func(prefix []byte) (bool, []byte) {
 		retain, nextCreated := l.rd.RetainWithMarker(prefix)
 		return !retain, nextCreated
 	}
 
 	if err := l.walkAccountTree(logPrefix, prefix, doDelete, cache, canUse, func(ihK []byte, ihV common.Hash, hasTree, skipState bool, accSeek []byte) error {
-		if bytes.HasPrefix(ihK, common.FromHex("0502")) {
-			fmt.Printf("9:%x,%t,%x\n", ihK, skipState, accSeek)
-		}
 		if skipState {
 			goto SkipAccounts
 		}
-		if err := cache.WalkAccounts(accSeek, func(addrHash common.Hash, acc *accounts.Account) (bool, error) {
+		if err := cache.WalkAccounts(common.CopyBytes(accSeek), func(addrHash common.Hash, acc *accounts.Account) (bool, error) {
 			if err := common.Stopped(quit); err != nil {
 				return false, err
 			}
@@ -1759,7 +1756,7 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 				return false, nil
 			}
 			l.accountValue.Copy(acc)
-			if err := l.receiver.Receive(AccountStreamItem, l.kHex, nil, &l.accountValue, nil, nil, false, 0); err != nil {
+			if err := l.receiver.Receive(AccountStreamItem, common.CopyBytes(l.kHex), nil, &l.accountValue, nil, nil, false, 0); err != nil {
 				return false, err
 			}
 			if l.accountValue.Incarnation == 0 {
@@ -1780,7 +1777,7 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 					if keyIsBefore(ihKS, l.kHexS) { // read until next AccTrie
 						break
 					}
-					if err := l.receiver.Receive(StorageStreamItem, accWithInc, common.CopyBytes(l.kHexS), nil, vS[32:], nil, false, 0); err != nil {
+					if err := l.receiver.Receive(StorageStreamItem, accWithInc, common.CopyBytes(l.kHexS), nil, common.CopyBytes(vS[32:]), nil, false, 0); err != nil {
 						return err
 					}
 				}
@@ -1789,7 +1786,7 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 				if ihKS == nil { // Loop termination
 					return nil
 				}
-				if err := l.receiver.Receive(SHashStreamItem, accWithInc, common.CopyBytes(ihKS), nil, nil, ihVS[:], hasTreeS, 0); err != nil {
+				if err := l.receiver.Receive(SHashStreamItem, accWithInc, common.CopyBytes(ihKS), nil, nil, common.CopyBytes(ihVS[:]), hasTreeS, 0); err != nil {
 					return err
 				}
 				//if len(ihKS) == 0 { // means we just sent acc.storageRoot
@@ -1815,7 +1812,7 @@ func (l *FlatDBTrieLoader) post(logPrefix string, storages ethdb.CursorDupSort, 
 			return nil
 		}
 
-		if err := l.receiver.Receive(AHashStreamItem, ihK, nil, nil, nil, ihV[:], hasTree, 0); err != nil {
+		if err := l.receiver.Receive(AHashStreamItem, common.CopyBytes(ihK), nil, nil, nil, common.CopyBytes(ihV[:]), hasTree, 0); err != nil {
 			return err
 		}
 		return nil

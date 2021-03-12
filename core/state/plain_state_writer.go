@@ -38,6 +38,15 @@ func (w *PlainStateWriter) UpdateAccountData(ctx context.Context, address common
 	}
 	value := make([]byte, account.EncodingLengthForStorage())
 	account.EncodeForStorage(value)
+	if ReadStateByPrefixes {
+		var addrHash common.Hash
+		h := common.NewHasher()
+		defer common.ReturnHasherToPool(h)
+		h.Sha.Reset()
+		_, _ = h.Sha.Write(address.Bytes())
+		_, _ = h.Sha.Read(addrHash[:])
+		_ = w.db.Put(dbutils.HashedAccountsBucket, addrHash.Bytes(), value)
+	}
 	return w.db.Put(dbutils.PlainStateBucket, address[:], value)
 }
 
