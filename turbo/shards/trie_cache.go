@@ -24,6 +24,10 @@ const (
 	storageHashWriteItemSize = int(unsafe.Sizeof(StorageTrieWriteItem{}) + 16)
 )
 
+type AccountTrieWriteItem struct {
+	ai *AccountTrieItem
+}
+
 type AccountTrieItem struct {
 	sequence                   int
 	queuePos                   int
@@ -34,15 +38,19 @@ type AccountTrieItem struct {
 	addrHashPrefix             []byte
 }
 
-type AccountTrieWriteItem struct {
-	ai *AccountTrieItem
-}
-
-func (awi *AccountTrieWriteItem) GetCacheItem() CacheItem     { return awi.ai }
-func (awi *AccountTrieWriteItem) SetCacheItem(item CacheItem) { awi.ai = item.(*AccountTrieItem) }
-func (awi *AccountTrieWriteItem) GetSize() int                { return accountHashWriteItemSize }
-func (awi *AccountTrieWriteItem) Less(than btree.Item) bool {
-	return awi.ai.Less(than)
+func (ahi *AccountTrieItem) CopyValueFrom(item CacheItem) {
+	other, ok := item.(*AccountTrieItem)
+	if !ok {
+		panic(fmt.Sprintf("expected AccountTrieItem, got %T", item))
+	}
+	ahi.hashes = make([]common.Hash, len(other.hashes))
+	for i := 0; i < len(ahi.hashes); i++ {
+		ahi.hashes[i] = other.hashes[i]
+	}
+	ahi.hasState = other.hasState
+	ahi.hasTree = other.hasTree
+	ahi.hasHash = other.hasHash
+	ahi.loadedFromDB = other.loadedFromDB
 }
 
 func (ahi *AccountTrieItem) Less(than btree.Item) bool {
@@ -65,41 +73,42 @@ func (ahi *AccountTrieItem) HasFlag(flag uint16) bool { return ahi.flags&flag !=
 func (ahi *AccountTrieItem) SetFlags(flags uint16)    { ahi.flags |= flags }
 func (ahi *AccountTrieItem) ClearFlags(flags uint16)  { ahi.flags &^= flags }
 func (ahi *AccountTrieItem) String() string {
-	return fmt.Sprintf("AccountTrieItem(addrHashPrefix=%x)", ahi.addrHashPrefix)
+	return fmt.Sprintf("%T(addrHashPrefix=%x)", ahi, ahi.addrHashPrefix)
 }
 
-func (ahi *AccountTrieItem) CopyValueFrom(item CacheItem) {
-	other, ok := item.(*AccountTrieItem)
-	if !ok {
-		panic(fmt.Sprintf("expected AccountTrieItem, got %T", item))
-	}
-	ahi.hashes = make([]common.Hash, len(other.hashes))
-	for i := 0; i < len(ahi.hashes); i++ {
-		ahi.hashes[i] = other.hashes[i]
-	}
-	ahi.hasState = other.hasState
-	ahi.hasTree = other.hasTree
-	ahi.hasHash = other.hasHash
-	ahi.loadedFromDB = other.loadedFromDB
-}
+func (awi *AccountTrieWriteItem) GetCacheItem() CacheItem     { return awi.ai }
+func (awi *AccountTrieWriteItem) SetCacheItem(item CacheItem) { awi.ai = item.(*AccountTrieItem) }
+func (awi *AccountTrieWriteItem) GetSize() int                { return accountHashWriteItemSize }
+func (awi *AccountTrieWriteItem) Less(than btree.Item) bool   { return awi.ai.Less(than) }
 
 type StorageTrieWriteItem struct {
 	i *StorageTrieItem
 }
+
 type StorageTrieItem struct {
-	flags, hasState, hasTree, hasHash uint16
-	sequence, queuePos                int
-	addrHash                          common.Hash
-	incarnation                       uint64
-	locHashPrefix                     []byte
-	hashes                            []common.Hash
+	sequence, queuePos         int
+	addrHash                   common.Hash
+	incarnation                uint64
+	flags                      uint16
+	hasState, hasTree, hasHash uint16
+	loadedFromDB               uint16 // prefix loaded from DB (must set at loading, and unset at eviction)
+	locHashPrefix              []byte
+	hashes                     []common.Hash
 }
 
-func (wi *StorageTrieWriteItem) GetCacheItem() CacheItem     { return wi.i }
-func (wi *StorageTrieWriteItem) SetCacheItem(item CacheItem) { wi.i = item.(*StorageTrieItem) }
-func (wi *StorageTrieWriteItem) GetSize() int                { return storageHashWriteItemSize }
-func (wi *StorageTrieWriteItem) Less(than btree.Item) bool {
-	return wi.i.Less(than.(*StorageTrieWriteItem).i)
+func (shi *StorageTrieItem) CopyValueFrom(item CacheItem) {
+	other, ok := item.(*StorageTrieItem)
+	if !ok {
+		panic(fmt.Sprintf("expected StorageTrieItem, got %T", item))
+	}
+	shi.hashes = make([]common.Hash, len(other.hashes))
+	for i := 0; i < len(shi.hashes); i++ {
+		shi.hashes[i] = other.hashes[i]
+	}
+	shi.hasState = other.hasState
+	shi.hasTree = other.hasTree
+	shi.hasHash = other.hasHash
+	shi.loadedFromDB = other.loadedFromDB
 }
 
 func (shi *StorageTrieItem) Less(than btree.Item) bool {
@@ -123,21 +132,14 @@ func (shi *StorageTrieItem) HasFlag(flag uint16) bool { return shi.flags&flag !=
 func (shi *StorageTrieItem) SetFlags(flags uint16)    { shi.flags |= flags }
 func (shi *StorageTrieItem) ClearFlags(flags uint16)  { shi.flags &^= flags }
 func (shi *StorageTrieItem) String() string {
-	return fmt.Sprintf("StorageTrieItem(addrHash=%x,incarnation=%d,locHashPrefix=%x)", shi.addrHash, shi.incarnation, shi.locHashPrefix)
+	return fmt.Sprintf("%T(addrHash=%x,incarnation=%d,locHashPrefix=%x)", shi, shi.addrHash, shi.incarnation, shi.locHashPrefix)
 }
 
-func (shi *StorageTrieItem) CopyValueFrom(item CacheItem) {
-	other, ok := item.(*StorageTrieItem)
-	if !ok {
-		panic(fmt.Sprintf("expected StorageTrieItem, got %T", item))
-	}
-	shi.hashes = make([]common.Hash, len(other.hashes))
-	for i := 0; i < len(shi.hashes); i++ {
-		shi.hashes[i] = other.hashes[i]
-	}
-	shi.hasState = other.hasState
-	shi.hasTree = other.hasTree
-	shi.hasHash = other.hasHash
+func (wi *StorageTrieWriteItem) GetCacheItem() CacheItem     { return wi.i }
+func (wi *StorageTrieWriteItem) SetCacheItem(item CacheItem) { wi.i = item.(*StorageTrieItem) }
+func (wi *StorageTrieWriteItem) GetSize() int                { return storageHashWriteItemSize }
+func (wi *StorageTrieWriteItem) Less(than btree.Item) bool {
+	return wi.i.Less(than.(*StorageTrieWriteItem).i)
 }
 
 // UnprocessedHeap is a priority queue of items that were modified after the last recalculation of the merkle tree
@@ -337,50 +339,64 @@ func (sc *StateCache) SetStorageTrieDelete(addrHash common.Hash, incarnation uin
 
 func (sc *StateCache) MarkAccountTrieAsLoaded(prefix []byte) {
 	if item, ok := sc.get(&AccountTrieItem{addrHashPrefix: prefix[:len(prefix)-1]}); ok {
-		if item == nil {
-			panic(1)
-		}
 		item.(*AccountTrieItem).loadedFromDB |= 1 << prefix[len(prefix)-1]
+	} else {
+		panic("unexpected")
+	}
+}
+
+func (sc *StateCache) MarkStorageTrieAsLoaded(addrHash common.Hash, incarnation uint64, prefix []byte) {
+	if item, ok := sc.get(&StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix[:len(prefix)-1]}); ok {
+		item.(*StorageTrieItem).loadedFromDB |= 1 << prefix[len(prefix)-1]
+	} else {
+		panic("unexpected")
 	}
 }
 
 func (sc *StateCache) FindDeepestAccountTrie(prefix []byte) (ihK []byte, childHasState, childLoaded, trieMiss bool) {
 	for i := 1; i < len(prefix); i++ {
-		k, hasState, hasTree, _, _, loaded := sc.AccountHashesSeek(prefix[:i])
+		k, hasState, hasTree, _, _, loaded := sc.AccountTrieSeek(prefix[:i])
 		if k == nil || !bytes.HasPrefix(k, prefix[:i]) {
 			if i == 1 {
-				return nil, false, false, false
-			} else {
-				return prefix[:i], false, false, i > 1
+				break
 			}
+			return prefix[:i], false, false, true
 		}
-		if 1<<prefix[i]&hasTree == 0 {
-			return prefix[:len(k)], 1<<prefix[i]&hasState != 0, 1<<prefix[i]&loaded != 0, false
+		if !has(hasTree, prefix[i]) {
+			return prefix[:len(k)], has(hasState, prefix[i]), has(loaded, prefix[i]), false
+		}
+	}
+	return nil, false, false, false
+}
+
+func (sc *StateCache) FindDeepestStorageTrie(addrHash common.Hash, incarnation uint64, prefix []byte) (ihK []byte, childHasState, childLoaded, trieMiss bool) {
+	for i := 1; i < len(prefix); i++ {
+		k, hasState, hasTree, _, _, loaded := sc.StorageTrieSeek(addrHash, incarnation, prefix[:i])
+		if k == nil || !bytes.HasPrefix(k, prefix[:i]) {
+			if i == 1 {
+				break
+			}
+			return prefix[:i], false, false, true
+		}
+		if !has(hasTree, prefix[i]) {
+			return prefix[:len(k)], has(hasState, prefix[i]), has(loaded, prefix[i]), false
 		}
 	}
 	return nil, false, false, false
 }
 
 func (sc *StateCache) GetAccountTrie(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, uint16, bool) {
-	var key = AccountTrieItem{addrHashPrefix: prefix}
-	if item, ok := sc.get(&key); ok {
-		if item != nil {
-			i := item.(*AccountTrieItem)
-			return i.addrHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, i.loadedFromDB, true
-		}
-		return nil, 0, 0, 0, nil, 0, true
+	if item, ok := sc.get(&AccountTrieItem{addrHashPrefix: prefix}); ok && item != nil {
+		i := item.(*AccountTrieItem)
+		return i.addrHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, i.loadedFromDB, true
 	}
 	return nil, 0, 0, 0, nil, 0, false
 }
 
 func (sc *StateCache) GetStorageTrie(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, bool) {
-	key := StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix}
-	if item, ok := sc.get(&key); ok {
-		if item != nil {
-			i := item.(*StorageTrieItem)
-			return i.locHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, true
-		}
-		return nil, 0, 0, 0, nil, true
+	if item, ok := sc.get(&StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix}); ok && item != nil {
+		i := item.(*StorageTrieItem)
+		return i.locHashPrefix, i.hasState, i.hasTree, i.hasHash, i.hashes, true
 	}
 	return nil, 0, 0, 0, nil, false
 }
@@ -455,7 +471,7 @@ func (sc *StateCache) AccountTree(logPrefix string, prefix []byte, walker Walker
 		_nextSiblingInMem()
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
-		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, _ := sc.AccountHashesSeek(seek)
+		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, _ := sc.AccountTrieSeek(seek)
 		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process, even if ihK==nil
 			if ihK == nil {
 				return false
@@ -581,7 +597,7 @@ func (sc *StateCache) StorageTree(logPrefix string, accHash common.Hash, incarna
 		_nextSiblingInMem()
 	}
 	var _seek = func(seek []byte, withinPrefix []byte) bool {
-		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem := sc.StorageTrieSeek(accHash, incarnation, seek)
+		ihK, hasStateItem, hasTreeItem, hasHashItem, hashItem, _ := sc.StorageTrieSeek(accHash, incarnation, seek)
 		if len(withinPrefix) > 0 { // seek within given prefix doesn't stop overall process, even if ihK==nil
 			if ihK == nil {
 				return false
@@ -662,55 +678,46 @@ func (sc *StateCache) StorageTree(logPrefix string, accHash common.Hash, incarna
 	return nil
 }
 
-func (sc *StateCache) AccountHashesSeek(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, uint16) {
-	var cur *AccountTrieItem
-	seek := &AccountTrieItem{}
-	id := id(seek)
-	seek.addrHashPrefix = append(seek.addrHashPrefix[:0], prefix...)
-	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
+func (sc *StateCache) AccountTrieSeek(prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, uint16) {
+	var found *AccountTrieItem
+	seek := &AccountTrieItem{addrHashPrefix: prefix}
+	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		it := i.(*AccountTrieItem)
 		if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 			return true
 		}
-		cur = it // found
+		found = it // found
 		return false
 	})
-	if cur == nil {
+	if found == nil {
 		return nil, 0, 0, 0, nil, 0
 	}
-	return cur.addrHashPrefix, cur.hasState, cur.hasTree, cur.hasHash, cur.hashes, cur.loadedFromDB
+	return found.addrHashPrefix, found.hasState, found.hasTree, found.hasHash, found.hashes, found.loadedFromDB
 }
 
 func (sc *StateCache) HasAccountTrieWithPrefix(prefix []byte) bool {
-	found, _, _, _, _, _ := sc.AccountHashesSeek(prefix)
+	found, _, _, _, _, _ := sc.AccountTrieSeek(prefix)
 	return bytes.HasPrefix(found, prefix)
 }
 
-func (sc *StateCache) StorageTrieSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash) {
-	var cur *StorageTrieItem
-	seek := &StorageTrieItem{}
-	id := id(seek)
-	seek.addrHash.SetBytes(addrHash.Bytes())
-	seek.incarnation = incarnation
-	seek.locHashPrefix = prefix
-	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
+func (sc *StateCache) StorageTrieSeek(addrHash common.Hash, incarnation uint64, prefix []byte) ([]byte, uint16, uint16, uint16, []common.Hash, uint16) {
+	var found *StorageTrieItem
+	seek := &StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix}
+	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		it := i.(*StorageTrieItem)
 		if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
 			return true
 		}
-		if it.addrHash != addrHash {
+		if it.addrHash != addrHash || it.incarnation != incarnation {
 			return false
 		}
-		if it.incarnation != incarnation {
-			return false
-		}
-		cur = it
+		found = it
 		return false
 	})
-	if cur == nil {
-		return nil, 0, 0, 0, nil
+	if found == nil {
+		return nil, 0, 0, 0, nil, 0
 	}
-	return cur.locHashPrefix, cur.hasState, cur.hasTree, cur.hasHash, cur.hashes
+	return found.locHashPrefix, found.hasState, found.hasTree, found.hasHash, found.hashes, found.loadedFromDB
 }
 
 func WalkAccountHashesWrites(writes [5]*btree.BTree, update func(prefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash), del func(prefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash)) {
@@ -727,8 +734,7 @@ func WalkAccountHashesWrites(writes [5]*btree.BTree, update func(prefix []byte, 
 }
 
 func (sc *StateCache) WalkStorageHashes(walker func(addrHash common.Hash, incarnation uint64, prefix []byte, hasStat, hasTree, hasHash uint16, h []common.Hash) error) error {
-	id := id(&StorageTrieItem{})
-	sc.readWrites[id].Ascend(func(i btree.Item) bool {
+	sc.readWrites[id(&StorageTrieItem{})].Ascend(func(i btree.Item) bool {
 		it, ok := i.(*StorageTrieItem)
 		if !ok {
 			return true
@@ -745,8 +751,7 @@ func (sc *StateCache) WalkStorageHashes(walker func(addrHash common.Hash, incarn
 }
 
 func WalkStorageHashesWrites(writes [5]*btree.BTree, update func(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasState, hasTree, hasHash uint16, h []common.Hash), del func(addrHash common.Hash, incarnation uint64, locHashPrefix []byte, hasStat, hasTree, hasHash uint16, h []common.Hash)) {
-	id := id(&StorageWriteItem{})
-	writes[id].Ascend(func(i btree.Item) bool {
+	writes[id(&StorageWriteItem{})].Ascend(func(i btree.Item) bool {
 		it := i.(*StorageTrieWriteItem)
 		if it.i.HasFlag(AbsentFlag) || it.i.HasFlag(DeletedFlag) {
 			del(it.i.addrHash, it.i.incarnation, it.i.locHashPrefix, it.i.hasState, it.i.hasTree, it.i.hasHash, it.i.hashes)
@@ -760,8 +765,7 @@ func WalkStorageHashesWrites(writes [5]*btree.BTree, update func(addrHash common
 func (sc *StateCache) WalkStorage(addrHash common.Hash, incarnation uint64, prefix []byte, walker func(locHash common.Hash, val []byte) error) error {
 	fixedbytes, mask := ethdb.Bytesmask(len(prefix) * 8)
 	seek := &StorageSeek{seek: prefix, fixedBytes: fixedbytes - 1, mask: mask}
-	id := id(seek)
-	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
+	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		switch it := i.(type) {
 		case *StorageItem:
 			if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
@@ -792,8 +796,7 @@ func (sc *StateCache) WalkStorage(addrHash common.Hash, incarnation uint64, pref
 func (sc *StateCache) WalkAccounts(prefix []byte, walker func(addrHash common.Hash, acc *accounts.Account) (bool, error)) error {
 	fixedbytes, mask := ethdb.Bytesmask(len(prefix) * 8)
 	seek := &AccountSeek{seek: prefix, fixedBytes: fixedbytes - 1, mask: mask}
-	id := id(seek)
-	sc.readWrites[id].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
+	sc.readWrites[id(seek)].AscendGreaterOrEqual(seek, func(i btree.Item) bool {
 		switch it := i.(type) {
 		case *AccountItem:
 			if it.HasFlag(AbsentFlag) || it.HasFlag(DeletedFlag) {
@@ -824,3 +827,6 @@ func assertSubset(a, b uint16) {
 		panic(fmt.Errorf("invariant 'is subset' failed: %b, %b", a, b))
 	}
 }
+
+// has - returns true if bit `pos` is set in `bitset`
+func has(bitset uint16, pos uint8) bool { return 1<<pos&bitset != 0 }
