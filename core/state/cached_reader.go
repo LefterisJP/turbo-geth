@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
@@ -45,15 +46,14 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 		return a, nil
 	}
 
-	var hashed common.Hash
+	var addrHash common.Hash
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
 	h.Sha.Reset()
 	_, _ = h.Sha.Write(addrBytes)
-	_, _ = h.Sha.Read(hashed[:])
+	_, _ = h.Sha.Read(addrHash[:])
 	var hashedNibbles []byte
-	hexutil.DecompressNibbles(hashed[:], &hashedNibbles)
-	// TODO: if hasTree but no such ihK in cache - then need load this part of trie from disk to cache
+	hexutil.DecompressNibbles(addrHash[:], &hashedNibbles)
 	ihK, hasState, alreadyLoaded, trieMiss := cr.cache.FindDeepestAccountTrie(hashedNibbles[:])
 	if trieMiss {
 		if err := cr.r.(*PlainStateReader).db.Walk(dbutils.TrieOfAccountsBucket, ihK, len(ihK)*8, func(k, v []byte) (bool, error) {
@@ -66,7 +66,7 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 		ihK, hasState, alreadyLoaded, trieMiss = cr.cache.FindDeepestAccountTrie(hashedNibbles[:])
 	}
 
-	if ihK == nil {
+	if ihK == nil { // when Trie table is empty - can load individual records to cache - not by prefixes
 		a, err := cr.r.ReadAccountData(address)
 		if err != nil {
 			return nil, err
@@ -93,7 +93,7 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 	if err := cr.r.(*PlainStateReader).db.Walk(dbutils.HashedAccountsBucket, buf, fixedBits, func(k, v []byte) (bool, error) {
 		acc, ok := cr.cache.GetAccountByHashedAddress(common.BytesToHash(k))
 		if ok {
-			if bytes.Equal(k, hashed[:]) {
+			if bytes.Equal(k, addrHash[:]) {
 				found = true
 				a = acc
 			}
@@ -104,7 +104,7 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 			return false, err
 		}
 		cr.cache.DeprecatedSetAccountRead(common.BytesToHash(k), acc)
-		if bytes.Equal(k, hashed[:]) {
+		if bytes.Equal(k, addrHash[:]) {
 			found = true
 			a = acc
 		}
@@ -122,18 +122,98 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 // ReadAccountStorage is called when a storage item needs to be fetched from the state
 func (cr *CachedReader) ReadAccountStorage(address common.Address, incarnation uint64, key *common.Hash) ([]byte, error) {
 	addrBytes := address.Bytes()
-	if s, ok := cr.cache.GetStorage(addrBytes, incarnation, key.Bytes()); ok {
+	locBytes := key.Bytes()
+	if s, ok := cr.cache.GetStorage(addrBytes, incarnation, locBytes); ok {
 		return s, nil
 	}
-	v, err := cr.r.ReadAccountStorage(address, incarnation, key)
-	if err != nil {
+	if !ReadStateByPrefixes {
+		v, err := cr.r.ReadAccountStorage(address, incarnation, key)
+		if err != nil {
+			return nil, err
+		}
+		if len(v) == 0 {
+			cr.cache.SetStorageAbsent(addrBytes, incarnation, locBytes)
+		} else {
+			cr.cache.SetStorageRead(addrBytes, incarnation, locBytes, v)
+		}
+		return v, nil
+	}
+
+	var addrHash common.Hash
+	var locHash common.Hash
+	h := common.NewHasher()
+	defer common.ReturnHasherToPool(h)
+	h.Sha.Reset()
+	_, _ = h.Sha.Write(addrBytes)
+	_, _ = h.Sha.Read(addrHash[:])
+	h.Sha.Reset()
+	_, _ = h.Sha.Write(locBytes)
+	_, _ = h.Sha.Read(locHash[:])
+	var hashedNibbles []byte
+	hexutil.DecompressNibbles(addrHash[:], &hashedNibbles)
+	ihK, hasState, alreadyLoaded, trieMiss := cr.cache.FindDeepestStorageTrie(addrHash, incarnation, hashedNibbles[:])
+	if trieMiss {
+		if err := cr.r.(*PlainStateReader).db.Walk(dbutils.TrieOfAccountsBucket, ihK, len(ihK)*8, func(k, v []byte) (bool, error) {
+			hasState, hasTree, hasHash, newV := trie.UnmarshalTrieNodeTyped(v)
+			cr.cache.SetAccountTrieRead(k, hasState, hasTree, hasHash, newV)
+			return true, nil
+		}); err != nil {
+			return nil, err
+		}
+		ihK, hasState, alreadyLoaded, trieMiss = cr.cache.FindDeepestStorageTrie(addrHash, incarnation, hashedNibbles[:])
+	}
+
+	if ihK == nil { // when Trie table is empty - can load individual records to cache - not by prefixes
+		v, err := cr.r.ReadAccountStorage(address, incarnation, key)
+		if err != nil {
+			return nil, err
+		}
+		if len(v) == 0 {
+			cr.cache.SetStorageAbsent(addrBytes, incarnation, locBytes)
+		} else {
+			cr.cache.SetStorageRead(addrBytes, incarnation, locBytes, v)
+		}
+		return v, nil
+	}
+	if !hasState || alreadyLoaded {
+		cr.cache.SetStorageAbsent(addrBytes, incarnation, locBytes)
+		return nil, nil
+	}
+	buf := make([]byte, 40+len(ihK))
+	copy(buf, addrHash.Bytes())
+	binary.BigEndian.PutUint64(buf[32:], incarnation)
+	lastPart := buf[40:]
+	copy(lastPart, ihK)
+	fixedBits := 40*8 + len(ihK)*4
+	if len(ihK)%2 == 1 {
+		lastPart = append(lastPart, 0)
+	}
+	hexutil.CompressNibbles(lastPart, &lastPart)
+	buf = buf[:40+len(ihK)/2+len(ihK)%2]
+	found := false
+	var v []byte
+	if err := cr.r.(*PlainStateReader).db.Walk(dbutils.HashedStorageBucket, buf, fixedBits, func(k, vv []byte) (bool, error) {
+		_, ok := cr.cache.GetStorageByHashedAddress(addrHash, incarnation, common.BytesToHash(k[40:]))
+		if ok {
+			if bytes.Equal(k, addrHash[:]) {
+				found = true
+				v = vv
+			}
+			return true, nil
+		}
+		cr.cache.DeprecatedSetStorageRead(addrHash, incarnation, common.BytesToHash(k[40:]), vv)
+		if bytes.Equal(k, addrHash[:]) {
+			found = true
+			v = vv
+		}
+		return true, nil
+	}); err != nil {
 		return nil, err
 	}
-	if len(v) == 0 {
-		cr.cache.SetStorageAbsent(addrBytes, incarnation, key.Bytes())
-	} else {
-		cr.cache.SetStorageRead(addrBytes, incarnation, key.Bytes(), v)
+	if !found {
+		cr.cache.SetStorageAbsent(addrBytes, incarnation, locBytes)
 	}
+	cr.cache.MarkStorageTrieAsLoaded(addrHash, incarnation, ihK)
 	return v, nil
 }
 
