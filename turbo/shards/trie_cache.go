@@ -340,16 +340,12 @@ func (sc *StateCache) SetStorageTrieDelete(addrHash common.Hash, incarnation uin
 func (sc *StateCache) MarkAccountTrieAsLoaded(prefix []byte) {
 	if item, ok := sc.get(&AccountTrieItem{addrHashPrefix: prefix[:len(prefix)-1]}); ok {
 		item.(*AccountTrieItem).loadedFromDB |= 1 << prefix[len(prefix)-1]
-	} else {
-		panic("unexpected")
 	}
 }
 
 func (sc *StateCache) MarkStorageTrieAsLoaded(addrHash common.Hash, incarnation uint64, prefix []byte) {
 	if item, ok := sc.get(&StorageTrieItem{addrHash: addrHash, incarnation: incarnation, locHashPrefix: prefix[:len(prefix)-1]}); ok {
 		item.(*StorageTrieItem).loadedFromDB |= 1 << prefix[len(prefix)-1]
-	} else {
-		panic("unexpected")
 	}
 }
 

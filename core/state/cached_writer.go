@@ -24,7 +24,7 @@ func (cw *CachedWriter) UpdateAccountData(ctx context.Context, address common.Ad
 	if err := cw.w.UpdateAccountData(ctx, address, original, account); err != nil {
 		return err
 	}
-	cw.cache.SetAccountWrite(address.Bytes(), account)
+	cw.cache.SetAccountWritePlain(address.Bytes(), account)
 	return nil
 }
 
@@ -40,7 +40,7 @@ func (cw *CachedWriter) DeleteAccount(ctx context.Context, address common.Addres
 	if err := cw.w.DeleteAccount(ctx, address, original); err != nil {
 		return err
 	}
-	cw.cache.SetAccountDelete(address.Bytes())
+	cw.cache.SetAccountDeletePlain(address.Bytes())
 	return nil
 }
 
@@ -52,9 +52,9 @@ func (cw *CachedWriter) WriteAccountStorage(ctx context.Context, address common.
 		return nil
 	}
 	if value.IsZero() {
-		cw.cache.SetStorageDelete(address.Bytes(), incarnation, key.Bytes())
+		cw.cache.SetStorageDeletePlain(address.Bytes(), incarnation, key.Bytes())
 	} else {
-		cw.cache.SetStorageWrite(address.Bytes(), incarnation, key.Bytes(), value.Bytes())
+		cw.cache.SetStorageWritePlain(address.Bytes(), incarnation, key.Bytes(), value.Bytes())
 	}
 	return nil
 }

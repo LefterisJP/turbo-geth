@@ -597,8 +597,8 @@ func (sc *StateCache) readQueuesLen() (res int) {
 	return
 }
 
-// SetAccountRead adds given account to the cache, marking it as a read (not written)
-func (sc *StateCache) SetAccountRead(address []byte, account *accounts.Account) {
+// SetAccountReadPlain adds given account to the cache, marking it as a read (not written)
+func (sc *StateCache) SetAccountReadPlain(address []byte, account *accounts.Account) {
 	var ai AccountItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -611,10 +611,8 @@ func (sc *StateCache) SetAccountRead(address []byte, account *accounts.Account) 
 	sc.setRead(&ai, false /* absent */)
 }
 
-// hack to set hashed addr - we don't have another one in trie stage
-func (sc *StateCache) DeprecatedSetAccountRead(addrHash common.Hash, account *accounts.Account) {
-	var ai AccountItem
-	ai.addrHash.SetBytes(addrHash.Bytes())
+func (sc *StateCache) SetAccountRead(addrHash common.Hash, account *accounts.Account) {
+	ai := AccountItem{addrHash: addrHash}
 	ai.account.Copy(account)
 	sc.setRead(&ai, false /* absent */)
 }
@@ -649,8 +647,8 @@ func (sc *StateCache) GetStorageByHashedAddress(addrHash common.Hash, incarnatio
 
 }
 
-// SetAccountRead adds given account address to the cache, marking it as a absent
-func (sc *StateCache) SetAccountAbsent(address []byte) {
+// SetAccountReadPlain adds given account address to the cache, marking it as a absent
+func (sc *StateCache) SetAccountAbsentPlain(address []byte) {
 	var ai AccountItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -660,6 +658,10 @@ func (sc *StateCache) SetAccountAbsent(address []byte) {
 	//nolint:errcheck
 	h.Sha.Read(ai.addrHash[:])
 	sc.setRead(&ai, true /* absent */)
+}
+
+func (sc *StateCache) SetAccountAbsent(addrHash common.Hash) {
+	sc.setRead(&AccountItem{addrHash: addrHash}, true /* absent */)
 }
 
 func (sc *StateCache) setWrite(item CacheItem, writeItem CacheWriteItem, delete bool) {
@@ -730,8 +732,8 @@ func (sc *StateCache) setWrite(item CacheItem, writeItem CacheWriteItem, delete 
 	sc.writeSize += writeItem.GetSize()
 }
 
-// SetAccountWrite adds given account to the cache, marking it as written (cannot be evicted)
-func (sc *StateCache) SetAccountWrite(address []byte, account *accounts.Account) {
+// SetAccountWritePlain adds given account to the cache, marking it as written (cannot be evicted)
+func (sc *StateCache) SetAccountWritePlain(address []byte, account *accounts.Account) {
 	var ai AccountItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -747,8 +749,8 @@ func (sc *StateCache) SetAccountWrite(address []byte, account *accounts.Account)
 	sc.setWrite(&ai, &awi, false /* delete */)
 }
 
-// SetAccountDelete is very similar to SetAccountWrite with the difference that there no set value
-func (sc *StateCache) SetAccountDelete(address []byte) {
+// SetAccountDeletePlain is very similar to SetAccountWritePlain with the difference that there no set value
+func (sc *StateCache) SetAccountDeletePlain(address []byte) {
 	var ai AccountItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -763,7 +765,7 @@ func (sc *StateCache) SetAccountDelete(address []byte) {
 	sc.setWrite(&ai, &awi, true /* delete */)
 }
 
-func (sc *StateCache) SetStorageRead(address []byte, incarnation uint64, location []byte, value []byte) {
+func (sc *StateCache) SetStorageReadPlain(address []byte, incarnation uint64, location []byte, value []byte) {
 	var si StorageItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -778,6 +780,12 @@ func (sc *StateCache) SetStorageRead(address []byte, incarnation uint64, locatio
 	h.Sha.Write(location)
 	//nolint:errcheck
 	h.Sha.Read(si.locHash[:])
+	si.value.SetBytes(value)
+	sc.setRead(&si, false /* absent */)
+}
+
+func (sc *StateCache) SetStorageRead(addrHash common.Hash, incarnation uint64, locHash common.Hash, value []byte) {
+	si := StorageItem{addrHash: addrHash, incarnation: incarnation, locHash: locHash}
 	si.value.SetBytes(value)
 	sc.setRead(&si, false /* absent */)
 }
@@ -836,7 +844,7 @@ func (sc *StateCache) DeprecatedSetStorageWrite(addrHash common.Hash, incarnatio
 	sc.setWrite(&si, &swi, false /* delete */)
 }
 
-func (sc *StateCache) SetStorageAbsent(address []byte, incarnation uint64, location []byte) {
+func (sc *StateCache) SetStorageAbsentPlain(address []byte, incarnation uint64, location []byte) {
 	var si StorageItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -854,7 +862,11 @@ func (sc *StateCache) SetStorageAbsent(address []byte, incarnation uint64, locat
 	sc.setRead(&si, true /* absent */)
 }
 
-func (sc *StateCache) SetStorageWrite(address []byte, incarnation uint64, location []byte, value []byte) {
+func (sc *StateCache) SetStorageAbsent(addrHash common.Hash, incarnation uint64, locHash common.Hash) {
+	sc.setRead(&StorageItem{addrHash: addrHash, incarnation: incarnation, locHash: locHash}, true /* absent */)
+}
+
+func (sc *StateCache) SetStorageWritePlain(address []byte, incarnation uint64, location []byte, value []byte) {
 	var si StorageItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)
@@ -877,7 +889,15 @@ func (sc *StateCache) SetStorageWrite(address []byte, incarnation uint64, locati
 	sc.setWrite(&si, &swi, false /* delete */)
 }
 
-func (sc *StateCache) SetStorageDelete(address []byte, incarnation uint64, location []byte) {
+func (sc *StateCache) SetStorageWrite(addrHash common.Hash, incarnation uint64, locHash common.Hash, value []byte) {
+	si := StorageItem{addrHash: addrHash, incarnation: incarnation, locHash: locHash}
+	si.value.SetBytes(value)
+	var swi StorageWriteItem
+	swi.si = &si
+	sc.setWrite(&si, &swi, false /* delete */)
+}
+
+func (sc *StateCache) SetStorageDeletePlain(address []byte, incarnation uint64, location []byte) {
 	var si StorageItem
 	h := common.NewHasher()
 	defer common.ReturnHasherToPool(h)

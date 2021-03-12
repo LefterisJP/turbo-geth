@@ -12,6 +12,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/common/etl"
+	"github.com/ledgerwatch/turbo-geth/core/state"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
@@ -292,9 +293,9 @@ func getExtractFunc(db ethdb.Tx, cache *shards.StateCache, changeSetBucket strin
 		//		_, inCache := cache.GetAccount(k)
 		//		if len(value) == 0 {
 		//			if inCache {
-		//				cache.SetAccountDelete(k)
+		//				cache.SetAccountDeletePlain(k)
 		//			} else {
-		//				cache.SetAccountAbsent(k)
+		//				cache.SetAccountAbsentPlain(k)
 		//			}
 		//		} else {
 		//			acc := &accounts.Account{}
@@ -303,9 +304,9 @@ func getExtractFunc(db ethdb.Tx, cache *shards.StateCache, changeSetBucket strin
 		//				return err
 		//			}
 		//			if inCache {
-		//				cache.SetAccountWrite(k, acc)
+		//				cache.SetAccountWritePlain(k, acc)
 		//			} else {
-		//				cache.SetAccountRead(k, acc)
+		//				cache.SetAccountReadPlain(k, acc)
 		//			}
 		//		}
 		//	} else {
@@ -313,15 +314,15 @@ func getExtractFunc(db ethdb.Tx, cache *shards.StateCache, changeSetBucket strin
 		//		_, inCache := cache.GetStorage(stK, inc, stHash)
 		//		if len(value) == 0 {
 		//			if inCache {
-		//				cache.SetStorageDelete(stK, inc, stHash)
+		//				cache.SetStorageDeletePlain(stK, inc, stHash)
 		//			} else {
-		//				cache.SetStorageAbsent(stK, inc, stHash)
+		//				cache.SetStorageAbsentPlain(stK, inc, stHash)
 		//			}
 		//		} else {
 		//			if inCache {
-		//				cache.SetStorageWrite(stK, inc, stHash, value)
+		//				cache.SetStorageWritePlain(stK, inc, stHash, value)
 		//			} else {
-		//				cache.SetStorageRead(stK, inc, stHash, value)
+		//				cache.SetStorageReadPlain(stK, inc, stHash, value)
 		//			}
 		//		}
 		//	}
@@ -506,8 +507,21 @@ func (p *Promoter) Unwind(logPrefix string, s *StageState, u *UnwindState, stora
 		if errRewind != nil {
 			return fmt.Errorf("%s: getting rewind data: %v", logPrefix, errRewind)
 		}
+		h := common.NewHasher()
+		defer common.ReturnHasherToPool(h)
 		for key, value := range accountMap {
 			_, inCache := p.cache.GetAccount([]byte(key))
+			if !inCache {
+				var addrHash common.Hash
+				h.Sha.Reset()
+				_, _ = h.Sha.Write([]byte(key))
+				_, _ = h.Sha.Read(addrHash[:])
+				_, err := state.OnAccountMiss(p.db, p.cache, addrHash)
+				if err != nil {
+					return err
+				}
+				_, inCache = p.cache.GetAccount([]byte(key))
+			}
 			if len(value) > 0 {
 				var acc accounts.Account
 				if err := acc.DecodeForStorage(value); err != nil {
@@ -515,15 +529,15 @@ func (p *Promoter) Unwind(logPrefix string, s *StageState, u *UnwindState, stora
 				}
 				recoverCodeHashPlain(&acc, p.db, key)
 				if inCache {
-					p.cache.SetAccountWrite([]byte(key), &acc)
+					p.cache.SetAccountWritePlain([]byte(key), &acc)
 				} else {
-					p.cache.SetAccountRead([]byte(key), &acc)
+					p.cache.SetAccountReadPlain([]byte(key), &acc)
 				}
 			} else {
 				if inCache {
-					p.cache.SetAccountDelete([]byte(key))
+					p.cache.SetAccountDeletePlain([]byte(key))
 				} else {
-					p.cache.SetAccountAbsent([]byte(key))
+					p.cache.SetAccountAbsentPlain([]byte(key))
 				}
 			}
 		}
@@ -534,15 +548,15 @@ func (p *Promoter) Unwind(logPrefix string, s *StageState, u *UnwindState, stora
 			_, inCache := p.cache.GetStorage(stK, inc, stH)
 			if len(value) > 0 {
 				if inCache {
-					p.cache.SetStorageWrite(stK, inc, stH, value)
+					p.cache.SetStorageWritePlain(stK, inc, stH, value)
 				} else {
-					p.cache.SetStorageRead(stK, inc, stH, value)
+					p.cache.SetStorageReadPlain(stK, inc, stH, value)
 				}
 			} else {
 				if inCache {
-					p.cache.SetStorageDelete(stK, inc, stH)
+					p.cache.SetStorageDeletePlain(stK, inc, stH)
 				} else {
-					p.cache.SetStorageAbsent(stK, inc, stH)
+					p.cache.SetStorageAbsentPlain(stK, inc, stH)
 				}
 			}
 		}

@@ -427,14 +427,14 @@ func UnwindExecutionStage(u *UnwindState, s *StageState, stateDB ethdb.Database,
 				return err
 			}
 			//if params.Cache != nil {
-			//	params.Cache.SetAccountWrite([]byte(key), &acc)
+			//	params.Cache.SetAccountWritePlain([]byte(key), &acc)
 			//}
 		} else {
 			if err := deleteAccountPlain(tx, key); err != nil {
 				return err
 			}
 			//if params.Cache != nil {
-			//	params.Cache.SetAccountDelete([]byte(key))
+			//	params.Cache.SetAccountDeletePlain([]byte(key))
 			//}
 		}
 	}
@@ -446,14 +446,14 @@ func UnwindExecutionStage(u *UnwindState, s *StageState, stateDB ethdb.Database,
 				return err
 			}
 			//if params.Cache != nil {
-			//	params.Cache.SetStorageWrite(k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:], value)
+			//	params.Cache.SetStorageWritePlain(k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:], value)
 			//}
 		} else {
 			if err := tx.Delete(stateBucket, k[:storageKeyLength], nil); err != nil {
 				return err
 			}
 			//if params.Cache != nil {
-			//	params.Cache.SetStorageDelete(k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:])
+			//	params.Cache.SetStorageDeletePlain(k[:20], binary.BigEndian.Uint64(k[20:28]), k[28:])
 			//}
 		}
 	}

@@ -1524,7 +1524,7 @@ func loadAccsToCache(tx ethdb.Tx, accMisses [][]byte, cache *shards.StateCache, 
 			if err := a.DecodeForStorage(v); err != nil {
 				return false, err
 			}
-			cache.DeprecatedSetAccountRead(accountHash, &a)
+			cache.SetAccountRead(accountHash, &a)
 			return true, nil
 		}); err != nil {
 			return err
