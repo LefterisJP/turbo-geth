@@ -1096,5 +1096,5 @@ func less(k, k2 []byte, fixedbytes int, mask byte) (isLess bool) {
 	return cmp < 0
 }
 func hasPrefix(k, k2 []byte, fixedbytes int, mask byte) bool {
-	return bytes.Compare(k[:fixedbytes], k2[:fixedbytes]) == 0 && k[fixedbytes]&mask == k2[fixedbytes]&mask
+	return bytes.Equal(k[:fixedbytes], k2[:fixedbytes]) && k[fixedbytes]&mask == k2[fixedbytes]&mask
 }
