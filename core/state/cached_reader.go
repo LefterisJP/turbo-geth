@@ -69,7 +69,7 @@ func OnAccountMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.
 		}); err != nil {
 			return nil, err
 		}
-		ihK, hasState, alreadyLoaded, trieMiss = cache.FindDeepestAccountTrie(hashedNibbles[:])
+		ihK, hasState, alreadyLoaded, _ = cache.FindDeepestAccountTrie(hashedNibbles[:])
 	}
 	if ihK == nil { // when Trie table is empty - can load individual records to cache - not by prefixes
 		readAcc := func(addrHash common.Hash) (*accounts.Account, error) {
@@ -178,7 +178,7 @@ func OnStorageMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.
 		}); err != nil {
 			return nil, err
 		}
-		ihK, hasState, alreadyLoaded, trieMiss = cache.FindDeepestStorageTrie(addrHash, incarnation, hashedNibbles[:])
+		ihK, hasState, alreadyLoaded, _ = cache.FindDeepestStorageTrie(addrHash, incarnation, hashedNibbles[:])
 	}
 
 	if ihK == nil { // when Trie table is empty - can load individual records to cache - not by prefixes
