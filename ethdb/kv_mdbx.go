@@ -116,22 +116,6 @@ func (opts MdbxOpts) Open() (RwKV, error) {
 		}
 	}
 
-	if err = env.SetGeometry(-1, -1, int(opts.mapSize), int(2*datasize.GB), -1, 4*1024); err != nil {
-		return nil, err
-	}
-
-	if err = env.SetOption(mdbx.OptRpAugmentLimit, 32*1024*1024); err != nil {
-		return nil, err
-	}
-
-	if opts.mapSize == 0 {
-		if opts.inMem {
-			opts.mapSize = 64 * datasize.MB
-		} else {
-			opts.mapSize = LMDBDefaultMapSize
-		}
-	}
-
 	var flags = opts.flags
 	if opts.inMem {
 		flags ^= mdbx.Durable
