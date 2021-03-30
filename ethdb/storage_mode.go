@@ -14,7 +14,7 @@ type StorageMode struct {
 	CallTraces bool
 }
 
-var DefaultStorageMode = StorageMode{History: true, Receipts: true, TxIndex: true, CallTraces: false}
+var DefaultStorageMode = StorageMode{History: true, Receipts: true, TxIndex: true, CallTraces: true}
 
 func (m StorageMode) ToString() string {
 	modeString := ""
