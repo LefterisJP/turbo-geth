@@ -1465,7 +1465,10 @@ func CastTrieNodeValue(hashes, rootHash []byte) []common.Hash {
 }
 
 func loadAccTrieToCache(tx ethdb.Tx, misses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
-	c := tx.Cursor(dbutils.TrieOfAccountsBucket)
+	c, err := tx.Cursor(dbutils.TrieOfAccountsBucket)
+	if err != nil {
+		return err
+	}
 	defer c.Close()
 	for _, miss := range misses {
 		if err := common.Stopped(quit); err != nil {
@@ -1483,7 +1486,10 @@ func loadAccTrieToCache(tx ethdb.Tx, misses [][]byte, cache *shards.StateCache, 
 }
 
 func loadStorageTrieToCache(tx ethdb.Tx, prefix []byte, misses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
-	c := tx.Cursor(dbutils.TrieOfStorageBucket)
+	c, err := tx.Cursor(dbutils.TrieOfStorageBucket)
+	if err != nil {
+		return err
+	}
 	defer c.Close()
 	for _, miss := range misses {
 		if err := common.Stopped(quit); err != nil {
@@ -1501,7 +1507,10 @@ func loadStorageTrieToCache(tx ethdb.Tx, prefix []byte, misses [][]byte, cache *
 }
 
 func loadAccsToCache(tx ethdb.Tx, accMisses [][]byte, cache *shards.StateCache, quit <-chan struct{}) error {
-	c := tx.Cursor(dbutils.HashedAccountsBucket)
+	c, err := tx.Cursor(dbutils.HashedAccountsBucket)
+	if err != nil {
+		return err
+	}
 	defer c.Close()
 	for i := range accMisses {
 		miss := accMisses[i]
