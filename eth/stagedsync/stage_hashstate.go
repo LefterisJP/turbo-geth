@@ -516,7 +516,7 @@ func (p *Promoter) Unwind(logPrefix string, s *StageState, u *UnwindState, stora
 				h.Sha.Reset()
 				_, _ = h.Sha.Write([]byte(key))
 				_, _ = h.Sha.Read(addrHash[:])
-				_, err := state.OnAccountMiss(p.db, p.cache, addrHash)
+				_, err := state.OnAccountMiss(ethdb.NewRoTxDb(p.db), p.cache, addrHash)
 				if err != nil {
 					return err
 				}

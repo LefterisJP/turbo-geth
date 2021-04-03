@@ -57,10 +57,11 @@ func (cr *CachedReader) ReadAccountData(address common.Address) (*accounts.Accou
 	return OnAccountMiss(cr.r.(*PlainStateReader).db, cr.cache, addrHash)
 }
 
-func OnAccountMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.Hash) (*accounts.Account, error) {
+func OnAccountMiss(db ethdb.Getter, cache *shards.StateCache, addrHash common.Hash) (*accounts.Account, error) {
 	var hashedNibbles []byte
 	hexutil.DecompressNibbles(addrHash[:], &hashedNibbles)
 	ihK, hasState, alreadyLoaded, trieMiss := cache.FindDeepestAccountTrie(hashedNibbles[:])
+
 	if trieMiss {
 		if err := db.Walk(dbutils.TrieOfAccountsBucket, ihK, len(ihK)*8, func(k, v []byte) (bool, error) {
 			hasState, hasTree, hasHash, newV := trie.UnmarshalTrieNodeTyped(v)
@@ -166,7 +167,7 @@ func (cr *CachedReader) ReadAccountStorage(address common.Address, incarnation u
 	return OnStorageMiss(cr.r.(*PlainStateReader).db, cr.cache, addrHash, incarnation, locHash)
 }
 
-func OnStorageMiss(db ethdb.Database, cache *shards.StateCache, addrHash common.Hash, incarnation uint64, locHash common.Hash) ([]byte, error) {
+func OnStorageMiss(db ethdb.Getter, cache *shards.StateCache, addrHash common.Hash, incarnation uint64, locHash common.Hash) ([]byte, error) {
 	var hashedNibbles []byte
 	hexutil.DecompressNibbles(addrHash[:], &hashedNibbles)
 	ihK, hasState, alreadyLoaded, trieMiss := cache.FindDeepestStorageTrie(addrHash, incarnation, hashedNibbles[:])
